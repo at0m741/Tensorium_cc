@@ -59,6 +59,8 @@ enum class TokenKind {
   COLON,     // :
   COMMA,     // ,
   DOT,       // .
+  HASH,      // #
+  HASHHASH,  // ##
   ARROW,     // ->
   ELLIPSIS,  // ...
   PUNCT_END,
