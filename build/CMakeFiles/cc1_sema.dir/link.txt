@@ -1,2 +1,0 @@
-/usr/bin/ar qc libcc1_sema.a CMakeFiles/cc1_sema.dir/src/sema/Sema.cpp.o
-/usr/bin/ranlib libcc1_sema.a
