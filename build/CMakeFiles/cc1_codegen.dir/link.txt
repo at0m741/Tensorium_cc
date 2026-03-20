@@ -1,0 +1,2 @@
+/usr/bin/ar qc libcc1_codegen.a CMakeFiles/cc1_codegen.dir/src/codegen/IRGen.cpp.o
+/usr/bin/ranlib libcc1_codegen.a

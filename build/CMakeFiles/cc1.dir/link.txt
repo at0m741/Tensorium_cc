@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/cc1.dir/src/main.cpp.o -o cc1  libcc1_codegen.a libcc1_sema.a libcc1_parser.a libcc1_lexer.a

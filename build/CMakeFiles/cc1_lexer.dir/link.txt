@@ -1,0 +1,2 @@
+/usr/bin/ar qc libcc1_lexer.a CMakeFiles/cc1_lexer.dir/src/lexer/Lexer.cpp.o CMakeFiles/cc1_lexer.dir/src/lexer/Token.cpp.o
+/usr/bin/ranlib libcc1_lexer.a
