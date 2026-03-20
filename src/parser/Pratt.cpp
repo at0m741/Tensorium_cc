@@ -1,9 +1,9 @@
-#include "Parser.hpp"
 #include "AST.hpp"
+#include "Parser.hpp"
 
 namespace {
 int ternaryPrec() { return 3; }
-}
+} // namespace
 
 Expr *Parser::parseExpr(int minPrec) {
   Expr *lhs = parseUnary();
@@ -37,7 +37,7 @@ Expr *Parser::parseExpr(int minPrec) {
     if (!rhs)
       return nullptr;
 
-    auto *bin = new BinaryExp();
+    auto *bin = new BinaryExpr();
     bin->loc = lhs->loc;
     bin->op = tokenToBinaryOp(opTok);
     bin->lhs = lhs;

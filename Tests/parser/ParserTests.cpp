@@ -106,10 +106,10 @@ bool parses_binary_expression_precedence() {
   ParserTestContext ctx("1 + 2 * 3;\n");
   Expr *expr = ctx.helper.parseExpr();
   TEST_EXPECT(expr != nullptr);
-  auto *add = dynamic_cast<BinaryExp *>(expr);
+  auto *add = dynamic_cast<BinaryExpr *>(expr);
   TEST_EXPECT(add != nullptr);
   TEST_EXPECT(add->op == BinaryOp::ADD);
-  auto *rhs = dynamic_cast<BinaryExp *>(add->rhs);
+  auto *rhs = dynamic_cast<BinaryExpr *>(add->rhs);
   TEST_EXPECT(rhs != nullptr);
   TEST_EXPECT(rhs->op == BinaryOp::MUL);
   TEST_EXPECT(ctx.helper.currentKind() == TokenKind::SEMICOLON);
