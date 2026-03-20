@@ -92,6 +92,11 @@ struct BinaryExp : Expr {
   Expr *rhs = nullptr;
 };
 
+struct UnaryExpr : Expr {
+  UnaryOp op;
+  Expr *operand = nullptr;
+};
+
 struct TernaryExpr : Expr {
   Expr *cond = nullptr;
   Expr *then = nullptr;
