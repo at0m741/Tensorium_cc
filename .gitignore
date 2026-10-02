@@ -1,10 +1,7 @@
 *.egg-info/
 dist/
 __pycache__/
-<<<<<<< HEAD
-=======
-
->>>>>>> refs/remotes/origin/main
+Tests/AST_AUDIT.md
 pybuild/
 build/
 *.o
