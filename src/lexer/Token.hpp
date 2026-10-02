@@ -1,4 +1,5 @@
 #pragma once
+#include "cc1/SourceLocation.hpp"
 #include <cstdint>
 #include <string>
 
@@ -126,12 +127,6 @@ inline bool isPunct(TokenKind k) {
 inline bool isOperator(TokenKind k) {
   return k > TokenKind::OP_BEGIN && k < TokenKind::OP_END;
 }
-struct SourceLoc {
-  const char *filename; /* no ptr copy eheh */
-  uint32_t line;
-  uint32_t col;
-};
-
 struct Token {
   TokenKind kind;
   std::string text;

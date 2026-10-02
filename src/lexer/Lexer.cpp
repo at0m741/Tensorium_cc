@@ -1,11 +1,13 @@
 #include "Lexer.hpp"
 #include "Token.hpp"
 #include <cctype>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 
-Lexer::Lexer(const std::string &source, const char *filename)
-    : _src(source), _filename(filename) {}
+Lexer::Lexer(const std::string &source, const char *filename,
+             DiagnosticEngine &diagnostics)
+    : _src(source), _filename(filename), _diagnostics(diagnostics) {}
 
 const std::unordered_map<std::string, TokenKind> Lexer::_keywords = {
     {"auto", TokenKind::KW_AUTO},         {"break", TokenKind::KW_BREAK},
@@ -53,21 +55,22 @@ Token Lexer::make(TokenKind k, std::string text) {
   return Token(k, std::move(text), loc());
 }
 
-Token Lexer::Error(const std::string &msg) {
-  fprintf(stderr, "%s:%u:%u: error: %s\n", _filename, _line, _col, msg.c_str());
-  return make(TokenKind::ERROR, "");
+Token Lexer::Error(const std::string &msg, SourceLoc location, size_t length) {
+  _diagnostics.error(location, msg, length);
+  return Token(TokenKind::ERROR, "", location);
 }
 
-bool Lexer::skipWhiteSpaceAndComments() {
+std::optional<Token> Lexer::skipWhiteSpaceAndComments() {
   while (_pos < _src.size()) {
     if (std::isspace(cur())) {
       advance();
     } else if (cur() == '/' && look() == '*') {
+      SourceLoc start = loc();
       advance();
       advance();
 
       bool closed = false;
-      while (_pos + 1 < _src.size()) {
+      while (_pos < _src.size()) {
         if (cur() == '*' && look() == '/') {
           advance();
           advance();
@@ -77,11 +80,11 @@ bool Lexer::skipWhiteSpaceAndComments() {
         advance();
       }
       if (!closed)
-        return false;
+        return Error("unterminated block comment", start, 2);
     } else
       break;
   }
-  return true;
+  return std::nullopt;
 }
 
 Token Lexer::lexIdent() {
@@ -125,15 +128,26 @@ Token Lexer::lexNumber() {
     }
   }
 
+  const size_t numericLength = s.size();
   while (cur() == 'u' || cur() == 'U' || cur() == 'l' || cur() == 'L' ||
          cur() == 'f' || cur() == 'F')
     s += advance();
 
   Token tok(isFloat ? TokenKind::FLOAT_LIT : TokenKind::INT_LIT, s, tmp);
-  if (isFloat)
-    tok.float_val = std::stod(s);
-  else
-    tok.int_val = std::stoll(s, nullptr, 0);
+  try {
+    size_t consumed = 0;
+    const std::string numericPart = s.substr(0, numericLength);
+    if (isFloat)
+      tok.float_val = std::stod(numericPart, &consumed);
+    else
+      tok.int_val = std::stoll(numericPart, &consumed, 0);
+    if (consumed != numericLength)
+      return Error("invalid numeric literal", tmp, s.size());
+  } catch (const std::invalid_argument &) {
+    return Error("invalid numeric literal", tmp, s.size());
+  } catch (const std::out_of_range &) {
+    return Error("numeric literal is out of range", tmp, s.size());
+  }
   return tok;
 }
 
@@ -145,9 +159,10 @@ Token Lexer::lexChar() {
   advance();
 
   if (cur() == '\0' || cur() == '\n')
-    return Error("Unterminated character literal");
+    return Error("unterminated character literal", tmp);
 
   if (cur() == '\\') {
+    SourceLoc escape = loc();
     s += advance(); // '\'
     switch (cur()) {
     case 'n':
@@ -179,7 +194,7 @@ Token Lexer::lexChar() {
       s += advance();
       break;
     default:
-      return Error("Invalid escape sequence");
+      return Error("invalid escape sequence", escape, 2);
     }
   } else {
     val = cur();
@@ -187,7 +202,7 @@ Token Lexer::lexChar() {
   }
 
   if (cur() != '\'')
-    return Error("Unterminated character literal");
+    return Error("unterminated character literal", tmp);
   advance();
 
   Token tok(TokenKind::CHAR_LIT, s, tmp);
@@ -202,8 +217,9 @@ Token Lexer::lexString() {
 
   while (_pos < _src.size() && cur() != '"') {
     if (cur() == '\0' || cur() == '\n')
-      return Error("Unterminated string literal");
+      return Error("unterminated string literal", tmp);
     if (cur() == '\\') {
+      SourceLoc escape = loc();
       s += advance();
       switch (cur()) {
       case 'n':
@@ -235,7 +251,7 @@ Token Lexer::lexString() {
         advance();
         break;
       default:
-        return Error("Invalid escape sequence");
+        return Error("invalid escape sequence", escape, 2);
       }
     } else {
       s += advance();
@@ -243,7 +259,7 @@ Token Lexer::lexString() {
   }
 
   if (cur() != '"')
-    return Error("Unterminated string literal");
+    return Error("unterminated string literal", tmp);
   advance();
 
   Token tok(TokenKind::STRING_LIT, s, tmp);
@@ -470,7 +486,7 @@ Token Lexer::lexPunct() {
 
   default:
     advance();
-    return Error("Unknown character");
+    return Error("unknown character", tmp);
   }
 }
 
@@ -480,8 +496,8 @@ Token Lexer::next() {
     return _peekTok;
   }
 
-  if(!skipWhiteSpaceAndComments())
-	  return Error("Unterminated block comment");
+  if (auto error = skipWhiteSpaceAndComments())
+    return *error;
 
   if (_pos >= _src.size())
     return make(TokenKind::END_OF_FILE, "");

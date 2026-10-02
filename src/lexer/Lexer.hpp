@@ -1,6 +1,8 @@
 #pragma once
 #include "Token.hpp"
+#include "cc1/Diagnostic.hpp"
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <sys/types.h>
 #include <unordered_map>
@@ -8,7 +10,8 @@
 
 class Lexer {
 public:
-  Lexer(const std::string &source, const char *filename);
+  Lexer(const std::string &source, const char *filename,
+        DiagnosticEngine &diagnostics);
 
   Token next(); /* Consume and return next token */
   Token peek(); /* lookup, but don't consume (il est punis miskine) */
@@ -19,6 +22,7 @@ public:
 private:
   std::string _src;
   const char *_filename;
+  DiagnosticEngine &_diagnostics;
   size_t _pos = 0;
   uint32_t _col = 1;
   uint32_t _line = 1;
@@ -33,7 +37,7 @@ private:
   char advance();                  /* char consumer */
   SourceLoc loc() const;
 
-  bool skipWhiteSpaceAndComments();
+  std::optional<Token> skipWhiteSpaceAndComments();
   Token lexIdent();
   Token lexNumber();
   Token lexChar();
@@ -41,5 +45,5 @@ private:
   Token lexPunct();
 
   Token make(TokenKind k, std::string text);
-  Token Error(const std::string &msg);
+  Token Error(const std::string &msg, SourceLoc location, size_t length = 1);
 };

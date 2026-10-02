@@ -1,72 +1,55 @@
-#pragma once 
-#include <vector>
-
 #pragma once
-#include "../../src/lexer/Token.hpp"
-#include <cstdio>
+#include "SourceLocation.hpp"
+#include <cstddef>
+#include <iostream>
 #include <string>
 #include <vector>
 
-enum class DiagLevel { NOTE, WARNING, ERROR, FATAL };
+enum class DiagnosticLevel { Note, Warning, Error, Fatal };
+enum class DiagnosticColor { Auto, Always, Never };
 
-struct Diag {
-  DiagLevel level;
-  SourceLoc loc;
-  std::string msg;
+struct Diagnostic {
+  DiagnosticLevel level;
+  std::string filename;
+  uint32_t line;
+  uint32_t col;
+  std::string message;
+  size_t length;
 };
 
-class Diagnostic {
+class DiagnosticEngine {
 public:
-  void report(DiagLevel level, const SourceLoc &loc, const std::string &msg) {
-    _diags.push_back({level, loc, msg});
+  DiagnosticEngine(std::string filename, std::string source,
+                   std::ostream &output = std::cerr,
+                   DiagnosticColor color = DiagnosticColor::Auto);
 
-    const char *prefix = nullptr;
-    switch (level) {
-    case DiagLevel::NOTE:
-      prefix = "note";
-      break;
-    case DiagLevel::WARNING:
-      prefix = "warning";
-      break;
-    case DiagLevel::ERROR:
-      prefix = "error";
-      break;
-    case DiagLevel::FATAL:
-      prefix = "fatal";
-      break;
-    }
-    fprintf(stderr, "%s:%u:%u %s: %s\n", loc.filename, loc.line, loc.col,
-            prefix, msg.c_str());
+  void report(DiagnosticLevel level, SourceLoc loc, const std::string &message,
+              size_t length = 1);
+  void error(SourceLoc loc, const std::string &message, size_t length = 1) {
+    report(DiagnosticLevel::Error, loc, message, length);
+  }
+  void warning(SourceLoc loc, const std::string &message, size_t length = 1) {
+    report(DiagnosticLevel::Warning, loc, message, length);
+  }
+  void note(SourceLoc loc, const std::string &message, size_t length = 1) {
+    report(DiagnosticLevel::Note, loc, message, length);
+  }
+  void fatal(SourceLoc loc, const std::string &message, size_t length = 1) {
+    report(DiagnosticLevel::Fatal, loc, message, length);
   }
 
-  void note(const SourceLoc &l, const std::string &m) {
-    report(DiagLevel::NOTE, l, m);
-  }
-  void warning(const SourceLoc &l, const std::string &m) {
-    report(DiagLevel::WARNING, l, m);
-  }
-  void error(const SourceLoc &l, const std::string &m) {
-    report(DiagLevel::ERROR, l, m);
-  }
-  void fatal(const SourceLoc &l, const std::string &m) {
-    report(DiagLevel::FATAL, l, m);
-  }
-
-  bool hasErrors() const {
-    for (auto &d : _diags)
-      if (d.level >= DiagLevel::ERROR)
-        return true;
-    return false;
-  }
-
-  int errorCount() const {
-    int n = 0;
-    for (auto &d : _diags)
-      if (d.level >= DiagLevel::ERROR)
-        n++;
-    return n;
-  }
+  bool hasErrors() const { return _errorCount != 0; }
+  size_t errorCount() const { return _errorCount; }
+  const std::vector<Diagnostic> &diagnostics() const { return _diagnostics; }
 
 private:
-  std::vector<Diag> _diags;
+  void render(const Diagnostic &diagnostic);
+
+  std::string _filename;
+  std::string _source;
+  std::ostream &_output;
+  bool _useColor;
+  size_t _errorCount = 0;
+  std::vector<size_t> _lineStarts;
+  std::vector<Diagnostic> _diagnostics;
 };

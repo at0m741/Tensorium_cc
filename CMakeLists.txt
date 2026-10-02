@@ -37,10 +37,15 @@ function(cc1_add_module target)
   )
 endfunction()
 
+cc1_add_module(cc1_diagnostics
+  src/Diagnostic.cpp
+)
+
 cc1_add_module(cc1_lexer
   src/lexer/Lexer.cpp
   src/lexer/Token.cpp
 )
+target_link_libraries(cc1_lexer PUBLIC cc1_diagnostics)
 
 cc1_add_module(cc1_parser
   src/parser/Parser.cpp

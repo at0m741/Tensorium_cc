@@ -1,6 +1,7 @@
 #include "parser/Parser.hpp"
 #include <exception>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,8 @@
 
 struct ParserTestContext {
   LangOptions opts = LangOptions::forc99();
-  Diagnostic diag;
+  std::ostringstream diagnosticsOutput;
+  DiagnosticEngine diag;
   TypePool types;
   TargetInfo target = makeTarget();
   Lexer lexer;
@@ -23,7 +25,9 @@ struct ParserTestContext {
   ParserTestHelper helper;
 
   explicit ParserTestContext(const std::string &source)
-      : lexer(source, "test.c"), parser(lexer, types, diag, target, opts),
+      : diag("test.c", source, diagnosticsOutput, DiagnosticColor::Never),
+        lexer(source, "test.c", diag),
+        parser(lexer, types, diag, target, opts),
         helper(parser) {}
 
   static TargetInfo makeTarget() {
@@ -129,6 +133,17 @@ bool parses_sizeof_type_expression() {
   return true;
 }
 
+bool reports_parser_error_with_source() {
+  ParserTestContext ctx("1 + ;\n");
+  TEST_EXPECT(ctx.helper.parseExpr() == nullptr);
+  TEST_EXPECT(ctx.diag.errorCount() == 1);
+  TEST_EXPECT(ctx.diagnosticsOutput.str() ==
+              "test.c:1:5: error: expected expression\n"
+              "    1 | 1 + ;\n"
+              "      |     ^\n");
+  return true;
+}
+
 int main() {
   struct TestEntry {
     const char *name;
@@ -142,6 +157,7 @@ int main() {
       {"parses_array_with_constant_size", parses_array_with_constant_size},
       {"parses_binary_expression_precedence", parses_binary_expression_precedence},
       {"parses_sizeof_type_expression", parses_sizeof_type_expression},
+      {"reports_parser_error_with_source", reports_parser_error_with_source},
   };
 
   int failed = 0;

@@ -2,7 +2,7 @@
 #include "AST.hpp"
 #include "Type.hpp"
 
-Parser::Parser(Lexer &lexer, TypePool &types, Diagnostic &diag,
+Parser::Parser(Lexer &lexer, TypePool &types, DiagnosticEngine &diag,
                const TargetInfo &target, const LangOptions &opts)
     : lex(lexer), types(types), _diag(diag), target(target), opts(opts) {
   _cur = lex.next();
