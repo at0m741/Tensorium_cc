@@ -1,6 +1,7 @@
 #pragma once
 #include "Token.hpp"
 #include "cc1/Diagnostic.hpp"
+#include "cc1/LangOptions.hpp"
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -11,7 +12,8 @@
 class Lexer {
 public:
   Lexer(const std::string &source, const char *filename,
-        DiagnosticEngine &diagnostics);
+        DiagnosticEngine &diagnostics,
+        const LangOptions &options = LangOptions::forc99());
 
   Token next(); /* Consume and return next token */
   Token peek(); /* lookup, but don't consume (il est punis miskine) */
@@ -23,6 +25,7 @@ private:
   std::string _src;
   const char *_filename;
   DiagnosticEngine &_diagnostics;
+  bool _allowLineComments;
   size_t _pos = 0;
   uint32_t _col = 1;
   uint32_t _line = 1;

@@ -6,8 +6,9 @@
 #include <unordered_map>
 
 Lexer::Lexer(const std::string &source, const char *filename,
-             DiagnosticEngine &diagnostics)
-    : _src(source), _filename(filename), _diagnostics(diagnostics) {}
+             DiagnosticEngine &diagnostics, const LangOptions &options)
+    : _src(source), _filename(filename), _diagnostics(diagnostics),
+      _allowLineComments(options.allowLineComments) {}
 
 const std::unordered_map<std::string, TokenKind> Lexer::_keywords = {
     {"auto", TokenKind::KW_AUTO},         {"break", TokenKind::KW_BREAK},
@@ -64,6 +65,9 @@ std::optional<Token> Lexer::skipWhiteSpaceAndComments() {
   while (_pos < _src.size()) {
     if (std::isspace(cur())) {
       advance();
+    } else if (_allowLineComments && cur() == '/' && look() == '/') {
+      while (_pos < _src.size() && cur() != '\n' && cur() != '\r')
+        advance();
     } else if (cur() == '/' && look() == '*') {
       SourceLoc start = loc();
       advance();

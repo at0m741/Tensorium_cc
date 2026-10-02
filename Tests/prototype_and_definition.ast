@@ -1,0 +1,6 @@
+TranslationUnit
+  FuncDecl f
+  FuncDecl main
+    CompoundStmt
+      ReturnStmt
+        IntLitExpr 0

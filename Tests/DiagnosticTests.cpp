@@ -77,6 +77,62 @@ void testNumbers() {
         "valid input produced diagnostics");
 }
 
+void testLineComments() {
+  {
+    const std::string source = "// @ \" ' /* ignored\nint x; // tail\n// final";
+    std::ostringstream output;
+    DiagnosticEngine diagnostics("test.c", source, output);
+    Lexer lexer(source, "test.c", diagnostics);
+    const auto tokens = lexer.tokenizeAll();
+    check(tokens.size() == 4 && tokens[0].kind == TokenKind::KW_INT &&
+          tokens[1].kind == TokenKind::IDENT && tokens[1].text == "x" &&
+          tokens[2].kind == TokenKind::SEMICOLON && tokens[3].isEof(),
+          "line comments were not skipped");
+    check(tokens[0].loc.line == 2 && tokens[0].loc.col == 1,
+          "incorrect source position after a line comment");
+    check(!diagnostics.hasErrors() && output.str().empty(),
+          "comment contents produced diagnostics");
+  }
+  for (const char *source : {"//", "// comment", "// comment\n"}) {
+    std::ostringstream output;
+    DiagnosticEngine diagnostics("test.c", source, output);
+    Lexer lexer(source, "test.c", diagnostics);
+    const auto tokens = lexer.tokenizeAll();
+    check(tokens.size() == 1 && tokens[0].isEof() && !diagnostics.hasErrors(),
+          "line comment at end of file did not produce EOF");
+  }
+  {
+    const std::string source = "/* block */ // line\r\n  int x;\n";
+    std::ostringstream output;
+    DiagnosticEngine diagnostics("test.c", source, output);
+    Lexer lexer(source, "test.c", diagnostics);
+    const auto tokens = lexer.tokenizeAll();
+    check(tokens.size() == 4 && tokens[0].kind == TokenKind::KW_INT &&
+          tokens[0].loc.line == 2 && tokens[0].loc.col == 3 &&
+          !diagnostics.hasErrors(), "mixed comments or CRLF positions changed");
+  }
+  {
+    const std::string source = "8 / 2; x /= 2; \"// not a comment\";";
+    std::ostringstream output;
+    DiagnosticEngine diagnostics("test.c", source, output);
+    Lexer lexer(source, "test.c", diagnostics);
+    const auto tokens = lexer.tokenizeAll();
+    check(tokens.size() == 11 && tokens[1].kind == TokenKind::DIV &&
+          tokens[5].kind == TokenKind::DIV_ASSIGN &&
+          tokens[8].kind == TokenKind::STRING_LIT &&
+          tokens[8].str_val == "// not a comment" && !diagnostics.hasErrors(),
+          "division operators or strings were treated as comments");
+  }
+  {
+    std::ostringstream output;
+    DiagnosticEngine diagnostics("test.c", "// text", output);
+    Lexer lexer("// text", "test.c", diagnostics, LangOptions::forC89());
+    check(lexer.next().kind == TokenKind::DIV &&
+          lexer.next().kind == TokenKind::DIV,
+          "allowLineComments=false was ignored");
+  }
+}
+
 void testLevelsAndColor() {
   std::ostringstream plain;
   DiagnosticEngine diagnostics("test.c", "x", plain);
@@ -133,6 +189,7 @@ int main() {
   try {
     testLocations();
     testNumbers();
+    testLineComments();
     testLevelsAndColor();
     testRenderingBounds();
     testPeek();

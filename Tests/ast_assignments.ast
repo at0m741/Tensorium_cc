@@ -1,0 +1,9 @@
+TranslationUnit
+  FuncDecl assign
+    CompoundStmt
+      ReturnStmt
+        BinaryExpr =
+          IdentExpr a
+          BinaryExpr =
+            IdentExpr b
+            IdentExpr c

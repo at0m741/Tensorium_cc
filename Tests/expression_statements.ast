@@ -1,0 +1,10 @@
+TranslationUnit
+  FuncDecl main
+    CompoundStmt
+      ExprStmt
+        BinaryExpr +
+          IntLitExpr 1
+          IntLitExpr 2
+      ExprStmt
+      ReturnStmt
+        IntLitExpr 0

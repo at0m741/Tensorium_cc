@@ -1,0 +1,9 @@
+TranslationUnit
+  TypedefDecl math_cb
+  VarDecl compute
+  FuncDecl add_scaled
+    CompoundStmt
+      ReturnStmt
+        BinaryExpr +
+          IdentExpr a
+          IdentExpr b

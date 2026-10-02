@@ -1,0 +1,9 @@
+TranslationUnit
+  FuncDecl grouped
+    CompoundStmt
+      ReturnStmt
+        BinaryExpr *
+          BinaryExpr +
+            IntLitExpr 1
+            IntLitExpr 2
+          IntLitExpr 3

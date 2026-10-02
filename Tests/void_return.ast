@@ -1,0 +1,4 @@
+TranslationUnit
+  FuncDecl f
+    CompoundStmt
+      ReturnStmt

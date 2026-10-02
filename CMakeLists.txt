@@ -50,6 +50,7 @@ target_link_libraries(cc1_lexer PUBLIC cc1_diagnostics)
 cc1_add_module(cc1_parser
   src/parser/Parser.cpp
   src/parser/Pratt.cpp
+  src/parser/ASTDump.cpp
 )
 target_link_libraries(cc1_parser PUBLIC cc1_lexer)
 

@@ -1,0 +1,4 @@
+TranslationUnit
+  VarDecl global_value
+  VarDecl ptr_to_ptr
+  VarDecl table

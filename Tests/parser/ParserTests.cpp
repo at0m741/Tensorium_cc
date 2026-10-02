@@ -1,4 +1,5 @@
 #include "parser/Parser.hpp"
+#include "parser/ASTDump.hpp"
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -28,7 +29,7 @@ struct ParserTestContext {
 
   explicit ParserTestContext(const std::string &source)
       : diag("test.c", source, diagnosticsOutput, DiagnosticColor::Never),
-        lexer(source, "test.c", diag),
+        lexer(source, "test.c", diag, opts),
         parser(lexer, types, diag, target, opts),
         helper(parser) {}
 
@@ -305,6 +306,121 @@ bool rejects_incomplete_return_expression() {
                                     "expected expression", 2, 14);
 }
 
+FuncDecl *findFunction(TranslationUnit *tu, const std::string &name) {
+  for (auto *decl : tu->decls)
+    if (auto *fn = dynamic_cast<FuncDecl *>(decl))
+      if (fn->name == name)
+        return fn;
+  return nullptr;
+}
+
+ReturnStmt *firstReturn(FuncDecl *fn) {
+  if (!fn || !fn->body || fn->body->items.empty())
+    return nullptr;
+  return dynamic_cast<ReturnStmt *>(fn->body->items.front());
+}
+
+bool parses_two_call_arguments() {
+  ParserTestContext ctx(readTestSource("ast_calls.c"));
+  auto *tu = ctx.parser.parse();
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  auto *ret = firstReturn(findFunction(tu, "main"));
+  TEST_EXPECT(ret != nullptr);
+  auto *call = dynamic_cast<CallExpr *>(ret->value);
+  TEST_EXPECT(call != nullptr);
+  std::cout << "sum(1, 2): " << call->args.size() << " argument(s), expected 2\n";
+  TEST_EXPECT(call->args.size() == 2);
+  auto *one = dynamic_cast<IntLitExpr *>(call->args[0]);
+  auto *two = dynamic_cast<IntLitExpr *>(call->args[1]);
+  TEST_EXPECT(one != nullptr && one->val == 1);
+  TEST_EXPECT(two != nullptr && two->val == 2);
+  return true;
+}
+
+bool preserves_parenthesized_comma_argument() {
+  ParserTestContext ctx(readTestSource("ast_comma_argument.c"));
+  auto *tu = ctx.parser.parse();
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  auto *ret = firstReturn(findFunction(tu, "main"));
+  TEST_EXPECT(ret != nullptr);
+  auto *call = dynamic_cast<CallExpr *>(ret->value);
+  TEST_EXPECT(call != nullptr && call->args.size() == 1);
+  auto *comma = dynamic_cast<BinaryExpr *>(call->args[0]);
+  TEST_EXPECT(comma != nullptr && comma->op == BinaryOp::COMMA);
+  auto *one = dynamic_cast<IntLitExpr *>(comma->lhs);
+  auto *two = dynamic_cast<IntLitExpr *>(comma->rhs);
+  TEST_EXPECT(one != nullptr && one->val == 1);
+  TEST_EXPECT(two != nullptr && two->val == 2);
+  return true;
+}
+
+bool preserves_function_parameter_names() {
+  ParserTestContext ctx(readTestSource("ast_assignments.c"));
+  auto *tu = ctx.parser.parse();
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  auto *fn = findFunction(tu, "assign");
+  TEST_EXPECT(fn != nullptr && fn->type->params.size() == 3);
+  std::cout << "assign: " << fn->params.size() << " named parameter(s), expected 3\n";
+  TEST_EXPECT(fn->params.size() == 3);
+  TEST_EXPECT(fn->params[0]->name == "a");
+  TEST_EXPECT(fn->params[1]->name == "b");
+  TEST_EXPECT(fn->params[2]->name == "c");
+  return true;
+}
+
+bool preserves_tag_declarations() {
+  ParserTestContext ctx(readTestSource("mixed_structs.c"));
+  auto *tu = ctx.parser.parse();
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  std::cout << "mixed_structs: " << tu->decls.size() << " declaration(s), expected 6\n";
+  TEST_EXPECT(tu->decls.size() == 6);
+  TEST_EXPECT(dynamic_cast<StructDecl *>(tu->decls[0]) != nullptr);
+  TEST_EXPECT(dynamic_cast<UnionDecl *>(tu->decls[1]) != nullptr);
+  TEST_EXPECT(dynamic_cast<EnumDecl *>(tu->decls[2]) != nullptr);
+  return true;
+}
+
+bool decodes_string_literal_escape() {
+  ParserTestContext ctx(readTestSource("ast_literals.c"));
+  auto *tu = ctx.parser.parse();
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  auto *ret = firstReturn(findFunction(tu, "text"));
+  TEST_EXPECT(ret != nullptr);
+  auto *literal = dynamic_cast<StringLitExpr *>(ret->value);
+  TEST_EXPECT(literal != nullptr);
+  std::cout << "hello\\n: " << literal->val.size() << " decoded byte(s), expected 6\n";
+  TEST_EXPECT(literal->val == "hello\n");
+  return true;
+}
+
+bool dumps_parsed_expression_nodes() {
+  struct Case { const char *fixture; const char *node; };
+  const Case cases[] = {
+      {"ast_unary.c", "UnaryExpr"},
+      {"ast_conditional.c", "TernaryExpr"},
+      {"ast_calls.c", "CallExpr"},
+      {"ast_index.c", "IndexExpr"},
+      {"ast_member.c", "MemberExpr"},
+      {"ast_sizeof.c", "SizeofExpr"},
+      {"ast_literals.c", "CharLitExpr"},
+      {"ast_literals.c", "StringLitExpr"},
+  };
+  bool complete = true;
+  for (const auto &test : cases) {
+    ParserTestContext ctx(readTestSource(test.fixture));
+    auto *tu = ctx.parser.parse();
+    TEST_EXPECT(!ctx.diag.hasErrors());
+    std::ostringstream output;
+    dumpAST(tu, output);
+    if (output.str().find(test.node) == std::string::npos ||
+        output.str().find("UnsupportedNode") != std::string::npos) {
+      std::cerr << test.fixture << ": dump is missing " << test.node << '\n';
+      complete = false;
+    }
+  }
+  return complete;
+}
+
 int main() {
   struct TestEntry {
     const char *name;
@@ -328,6 +444,12 @@ int main() {
       {"rejects_return_without_semicolon", rejects_return_without_semicolon},
       {"rejects_unclosed_function_body", rejects_unclosed_function_body},
       {"rejects_incomplete_return_expression", rejects_incomplete_return_expression},
+      {"parses_two_call_arguments", parses_two_call_arguments},
+      {"preserves_parenthesized_comma_argument", preserves_parenthesized_comma_argument},
+      {"preserves_function_parameter_names", preserves_function_parameter_names},
+      {"preserves_tag_declarations", preserves_tag_declarations},
+      {"decodes_string_literal_escape", decodes_string_literal_escape},
+      {"dumps_parsed_expression_nodes", dumps_parsed_expression_nodes},
   };
 
   int failed = 0;
