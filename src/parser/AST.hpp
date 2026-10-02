@@ -86,10 +86,15 @@ enum class BinaryOp {
   COMMA,
 };
 
-struct BinaryExp : Expr {
+struct BinaryExpr : Expr {
   BinaryOp op;
   Expr *lhs = nullptr;
   Expr *rhs = nullptr;
+};
+
+struct UnaryExpr : Expr {
+  UnaryOp op;
+  Expr *operand = nullptr;
 };
 
 struct TernaryExpr : Expr {

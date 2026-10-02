@@ -1,6 +1,10 @@
 *.egg-info/
 dist/
 __pycache__/
+<<<<<<< HEAD
+=======
+
+>>>>>>> refs/remotes/origin/main
 pybuild/
 build/
 *.o
