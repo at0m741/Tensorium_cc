@@ -60,6 +60,7 @@ target_link_libraries(cc1_sema PUBLIC cc1_parser)
 
 cc1_add_module(cc1_codegen
   src/codegen/IRGen.cpp
+  src/codegen/TargetInfo.cpp
 )
 target_link_libraries(cc1_codegen PUBLIC cc1_sema)
 

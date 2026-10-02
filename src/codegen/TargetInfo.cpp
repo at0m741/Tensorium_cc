@@ -1,6 +1,6 @@
 #include "../../include/cc1/TargetInfo.hpp"
 
-TargetInfo i386() {
+TargetInfo TargetInfo::i386() {
   TargetInfo T;
   T.arch = TargetInfo::I386;
   T.sizeofLong = 4;
@@ -11,7 +11,7 @@ TargetInfo i386() {
   return T;
 }
 
-TargetInfo x86_64() {
+TargetInfo TargetInfo::x86_64() {
   TargetInfo T;
   T.arch = TargetInfo::X86_64;
   T.sizeofLong = 8;
@@ -23,7 +23,7 @@ TargetInfo x86_64() {
   return T;
 }
 
-TargetInfo aarch64() {
+TargetInfo TargetInfo::aarch64() {
   TargetInfo T;
   T.arch = TargetInfo::AARCH64;
   T.sizeofLong = 8;

@@ -1,12 +1,17 @@
 #include "lexer/Lexer.hpp"
 #include "lexer/Token.hpp"
 #include "cc1/Diagnostic.hpp"
+#include "cc1/LangOptions.hpp"
+#include "cc1/TargetInfo.hpp"
+#include "parser/Parser.hpp"
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 
 int main(int argc, char **argv) {
   DiagnosticColor color = DiagnosticColor::Auto;
+  bool dumpTokens = false;
   const char *filename = nullptr;
   bool options = true;
   for (int i = 1; i < argc; ++i) {
@@ -17,6 +22,8 @@ int main(int argc, char **argv) {
       color = DiagnosticColor::Always;
     } else if (options && arg == "-fno-color-diagnostics") {
       color = DiagnosticColor::Never;
+    } else if (options && arg == "--dump-tokens") {
+      dumpTokens = true;
     } else if ((options && !arg.empty() && arg[0] == '-') || filename) {
       DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
       diagnostics.error({}, filename ? "expected a single input file"
@@ -29,7 +36,8 @@ int main(int argc, char **argv) {
   if (!filename) {
     DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
     diagnostics.error({}, "no input file");
-    std::cerr << "usage: cc1 [-fcolor-diagnostics|-fno-color-diagnostics] <file.c>\n";
+    std::cerr << "usage: cc1 [--dump-tokens] "
+                 "[-fcolor-diagnostics|-fno-color-diagnostics] <file.c>\n";
     return 1;
   }
 
@@ -45,13 +53,32 @@ int main(int argc, char **argv) {
 
   DiagnosticEngine diagnostics(filename, src, std::cerr, color);
   Lexer lexer(src, filename, diagnostics);
-  const auto tokens = lexer.tokenizeAll();
-  if (diagnostics.hasErrors())
-    return 1;
+  if (dumpTokens) {
+    const auto tokens = lexer.tokenizeAll();
+    if (diagnostics.hasErrors())
+      return 1;
 
-  for (const auto &tok : tokens) {
-    printf("%s:%u:%u\t%s\t'%s'\n", tok.loc.filename, tok.loc.line, tok.loc.col,
-           tokenKindName(tok.kind), tok.text.c_str());
+    for (const auto &tok : tokens) {
+      printf("%s:%u:%u\t%s\t'%s'\n", tok.loc.filename, tok.loc.line, tok.loc.col,
+             tokenKindName(tok.kind), tok.text.c_str());
+    }
+    return 0;
   }
-  return 0;
+
+  TargetInfo target{};
+#if defined(__aarch64__) || defined(_M_ARM64)
+  target = TargetInfo::aarch64();
+#elif defined(__x86_64__) || defined(_M_X64)
+  target = TargetInfo::x86_64();
+#elif defined(__i386__) || defined(_M_IX86)
+  target = TargetInfo::i386();
+#else
+  diagnostics.error({}, "unsupported host architecture");
+  return 1;
+#endif
+  const LangOptions opts = LangOptions::forc99();
+  TypePool types;
+  Parser parser(lexer, types, diagnostics, target, opts);
+  std::unique_ptr<TranslationUnit> unit(parser.parse());
+  return diagnostics.hasErrors() ? 1 : 0;
 }

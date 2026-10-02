@@ -2,6 +2,10 @@ add_executable(parser_tests
   ParserTests.cpp
 )
 
+target_compile_definitions(parser_tests
+  PRIVATE CC1_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}/Tests"
+)
+
 target_link_libraries(parser_tests
   PRIVATE
     cc1_parser
@@ -10,3 +14,4 @@ target_link_libraries(parser_tests
 )
 
 add_test(NAME parser_tests COMMAND parser_tests)
+set_tests_properties(parser_tests PROPERTIES TIMEOUT 5)

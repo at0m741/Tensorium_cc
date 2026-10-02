@@ -1,6 +1,7 @@
 #include "Parser.hpp"
 #include "AST.hpp"
 #include "Type.hpp"
+#include <cmath>
 
 Parser::Parser(Lexer &lexer, TypePool &types, DiagnosticEngine &diag,
                const TargetInfo &target, const LangOptions &opts)
@@ -82,7 +83,7 @@ TranslationUnit *Parser::parse() {
   TranslationUnit *tu = new TranslationUnit();
   tu->loc = _cur.loc;
 
-  while (!_cur.isEof()) {
+  while (!_cur.isEof() && !_diag.hasErrors()) {
     if (check(TokenKind::SEMICOLON)) {
       advance();
       continue;
@@ -411,18 +412,8 @@ FuncDecl *Parser::parseFuncDecl(Type *retType, const std::string &name,
   fn->name = name;
   fn->type = retType;
 
-  if (match(TokenKind::L_BRACE)) {
-    error(_cur.loc, "function definitions are not implemented yet");
-    int depth = 1;
-    while (depth > 0 && !_cur.isEof()) {
-      if (match(TokenKind::L_BRACE)) {
-        ++depth;
-      } else if (match(TokenKind::R_BRACE)) {
-        --depth;
-      } else {
-        advance();
-      }
-    }
+  if (check(TokenKind::L_BRACE)) {
+    fn->body = parseCompoundStmt();
   } else {
     expect(TokenKind::SEMICOLON, "expected ';' after function declaration");
   }
@@ -507,4 +498,55 @@ Type *Parser::parseEnum() {
   }
 
   return t;
+}
+
+ReturnStmt *Parser::parseReturnStmt() {
+  auto *stmt = new ReturnStmt();
+  stmt->loc = expect(TokenKind::KW_RETURN, "expected 'return'").loc;
+
+  if (!check(TokenKind::SEMICOLON))
+    stmt->value = parseExpr();
+
+  if (!_diag.hasErrors())
+    expect(TokenKind::SEMICOLON, "expected ';' after return");
+
+  return stmt;
+}
+
+Stmt *Parser::parseStmt() {
+  if (check(TokenKind::L_BRACE))
+    return parseCompoundStmt();
+
+  if (check(TokenKind::KW_RETURN))
+    return parseReturnStmt();
+
+  auto *stmt = new ExprStmt();
+  stmt->loc = _cur.loc;
+
+  if (match(TokenKind::SEMICOLON))
+    return stmt;
+
+  stmt->expr = parseExpr();
+  if (!_diag.hasErrors())
+    expect(TokenKind::SEMICOLON, "expected ';' after expression");
+
+  return stmt;
+}
+
+CompoundStmt *Parser::parseCompoundStmt() {
+  auto *block = new CompoundStmt();
+  block->loc = expect(TokenKind::L_BRACE, "expected '{'").loc;
+
+  while (!check(TokenKind::R_BRACE) && !_cur.isEof() && !_diag.hasErrors()) {
+    Stmt *stmt = parseStmt();
+    if (stmt)
+      block->items.push_back(stmt);
+    else
+      break;
+  }
+
+  if (!_diag.hasErrors())
+    expect(TokenKind::R_BRACE, "expected '}' at end of block");
+
+  return block;
 }
