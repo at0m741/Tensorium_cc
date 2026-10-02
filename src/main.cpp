@@ -23,6 +23,8 @@ int main(int argc, char **argv) {
   for (auto &tok : lexer.tokenizeAll()) {
     printf("%s:%u:%u\t%s\t'%s'\n", tok.loc.filename, tok.loc.line, tok.loc.col,
            tokenKindName(tok.kind), tok.text.c_str());
+	if (tok.isError())
+		return 1;
   }
   return 0;
 }

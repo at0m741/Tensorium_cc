@@ -33,7 +33,7 @@ private:
   char advance();                  /* char consumer */
   SourceLoc loc() const;
 
-  void skipWhiteSpaceAndComments();
+  bool skipWhiteSpaceAndComments();
   Token lexIdent();
   Token lexNumber();
   Token lexChar();

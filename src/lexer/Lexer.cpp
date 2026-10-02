@@ -58,13 +58,14 @@ Token Lexer::Error(const std::string &msg) {
   return make(TokenKind::ERROR, "");
 }
 
-void Lexer::skipWhiteSpaceAndComments() {
+bool Lexer::skipWhiteSpaceAndComments() {
   while (_pos < _src.size()) {
     if (std::isspace(cur())) {
       advance();
     } else if (cur() == '/' && look() == '*') {
       advance();
       advance();
+
       bool closed = false;
       while (_pos + 1 < _src.size()) {
         if (cur() == '*' && look() == '/') {
@@ -76,10 +77,11 @@ void Lexer::skipWhiteSpaceAndComments() {
         advance();
       }
       if (!closed)
-        Error("Unterminated block comment");
+        return false;
     } else
       break;
   }
+  return true;
 }
 
 Token Lexer::lexIdent() {
@@ -107,7 +109,7 @@ Token Lexer::lexNumber() {
   } else {
     while (std::isdigit(cur()))
       s += advance();
-    if (cur() == '.' && std::isdigit(look())) {
+    if (cur() == '.') {
       isFloat = true;
       s += advance();
       while (std::isdigit(cur()))
@@ -478,7 +480,8 @@ Token Lexer::next() {
     return _peekTok;
   }
 
-  skipWhiteSpaceAndComments();
+  if(!skipWhiteSpaceAndComments())
+	  return Error("Unterminated block comment");
 
   if (_pos >= _src.size())
     return make(TokenKind::END_OF_FILE, "");
@@ -487,7 +490,7 @@ Token Lexer::next() {
 
   if (std::isalpha(c) || c == '_')
     return lexIdent();
-  if (std::isdigit(c))
+  if (std::isdigit(c) || (c == '.' && std::isdigit(look())))
     return lexNumber();
   if (c == '\'')
     return lexChar();
