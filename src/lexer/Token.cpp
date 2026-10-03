@@ -10,10 +10,8 @@ const char *tokenKindName(TokenKind k) {
     return "CHAR_LIT";
   case TokenKind::STRING_LIT:
     return "STRING_LIT";
-
   case TokenKind::IDENT:
     return "IDENT";
-
   case TokenKind::KW_AUTO:
     return "KW_AUTO";
   case TokenKind::KW_BREAK:
@@ -78,7 +76,6 @@ const char *tokenKindName(TokenKind k) {
     return "KW_VOLATILE";
   case TokenKind::KW_WHILE:
     return "KW_WHILE";
-
   case TokenKind::L_PAREN:
     return "L_PAREN";
   case TokenKind::R_PAREN:
@@ -107,7 +104,6 @@ const char *tokenKindName(TokenKind k) {
     return "ARROW";
   case TokenKind::ELLIPSIS:
     return "ELLIPSIS";
-
   case TokenKind::PLUS:
     return "PLUS";
   case TokenKind::MINUS:
@@ -176,12 +172,10 @@ const char *tokenKindName(TokenKind k) {
     return "MINUSMINUS";
   case TokenKind::QUESTION:
     return "QUESTION";
-
   case TokenKind::END_OF_FILE:
     return "END_OF_FILE";
   case TokenKind::ERROR:
     return "ERROR";
-
   default:
     return "UNKNOWN";
   }
