@@ -1,0 +1,24 @@
+TranslationUnit
+  FuncDecl unary_ops
+    ParamDecl x
+    CompoundStmt
+      ExprStmt
+        UnaryExpr pre++
+          IdentExpr x
+      ExprStmt
+        UnaryExpr pre--
+          IdentExpr x
+      ExprStmt
+        UnaryExpr post--
+          IdentExpr x
+      ExprStmt
+        UnaryExpr !
+          IdentExpr x
+      ExprStmt
+        UnaryExpr ~
+          IdentExpr x
+      ExprStmt
+        UnaryExpr &
+          IdentExpr x
+      ReturnStmt
+        IdentExpr x

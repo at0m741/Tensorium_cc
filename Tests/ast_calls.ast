@@ -1,0 +1,11 @@
+TranslationUnit
+  FuncDecl sum
+    ParamDecl a
+    ParamDecl b
+  FuncDecl main
+    CompoundStmt
+      ReturnStmt
+        CallExpr
+          IdentExpr sum
+          IntLitExpr 1
+          IntLitExpr 2

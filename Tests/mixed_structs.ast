@@ -1,0 +1,7 @@
+TranslationUnit
+  StructDecl Foo
+  UnionDecl Bar
+  EnumDecl Color
+  VarDecl foo_ptr
+  VarDecl value
+  VarDecl shade

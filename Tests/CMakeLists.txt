@@ -29,7 +29,10 @@ endforeach()
 
 foreach(FIXTURE IN ITEMS function_body basic_decls function_pointer
                          empty_function_body expression_statements nested_blocks
-                         prototype_and_definition void_return ast_grouping ast_assignments)
+                         prototype_and_definition void_return ast_grouping ast_assignments
+                         ast_unary ast_conditional ast_calls ast_comma_argument ast_index
+                         ast_member ast_sizeof ast_literals mixed_structs
+                         ast_escaped_literals ast_sizeof_expr ast_member_dot ast_unary_ops)
   add_test(NAME cli_ast_${FIXTURE}
     COMMAND ${CMAKE_COMMAND}
       -DCC1=$<TARGET_FILE:cc1>
@@ -58,6 +61,7 @@ cc1_add_cli_error_test(invalid_missing_semicolon 3 1 "expected ';' after return"
 cc1_add_cli_error_test(invalid_unclosed_block 3 1 "expected '}' at end of block")
 cc1_add_cli_error_test(invalid_return_expression 2 14 "expected expression")
 cc1_add_cli_error_test(invalid_ternary 2 14 "expected expression")
+cc1_add_cli_error_test(invalid_parameter_list 1 12 "expected parameter type")
 
 add_test(NAME cli_ast_invalid_parameter_list
   COMMAND ${CMAKE_COMMAND}
@@ -65,7 +69,7 @@ add_test(NAME cli_ast_invalid_parameter_list
     -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/invalid_parameter_list.c
     -DEXPECTED_STATUS=1
     -DDUMP_AST=ON
-    -DEXPECT_ANY_DIAGNOSTIC=ON
+    "-DEXPECTED_DIAGNOSTIC=1:12: error: expected parameter type"
     -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckParserCLI.cmake
 )
 set_tests_properties(cli_ast_invalid_parameter_list PROPERTIES TIMEOUT 5)

@@ -1,0 +1,8 @@
+TranslationUnit
+  StructDecl Item
+  FuncDecl read
+    ParamDecl item
+    CompoundStmt
+      ReturnStmt
+        MemberExpr ->value
+          IdentExpr item

@@ -1,5 +1,8 @@
 TranslationUnit
   FuncDecl assign
+    ParamDecl a
+    ParamDecl b
+    ParamDecl c
     CompoundStmt
       ReturnStmt
         BinaryExpr =

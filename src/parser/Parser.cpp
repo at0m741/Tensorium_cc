@@ -114,6 +114,8 @@ Decl *Parser::parseDecl() {
   if (sc == StorageClass::TYPEDEF) {
     std::string name;
     Type *full = parseDeclarator(base, name);
+    if (!full)
+      return nullptr;
     if (name.empty()) {
       error(_cur.loc, "typedef requires a name");
       return nullptr;
@@ -130,10 +132,28 @@ Decl *Parser::parseDecl() {
   }
   std::string name;
   Type *full = parseDeclarator(base, name);
+  if (!full)
+    return nullptr;
 
   if (name.empty()) {
     expect(TokenKind::SEMICOLON, "expected ';'");
-    return nullptr;
+    if (_diag.hasErrors() || full != base || base->tag.empty())
+      return nullptr;
+
+    Decl *decl = nullptr;
+    if (base->kind == Type::STRUCT)
+      decl = new StructDecl();
+    else if (base->kind == Type::UNION)
+      decl = new UnionDecl();
+    else if (base->kind == Type::ENUM)
+      decl = new EnumDecl();
+    else
+      return nullptr;
+
+    decl->loc = loc;
+    decl->name = base->tag;
+    decl->type = base;
+    return decl;
   }
 
   if (full->isFunction())
@@ -333,11 +353,15 @@ Type *Parser::parseDeclarator(Type *base, std::string &nameOut) {
 
     Type *placeholder = types.make(Type::INT);
     inner = parseDeclarator(placeholder, innerName);
+    if (!inner)
+      return nullptr;
     nameOut = innerName;
 
     expect(TokenKind::R_PAREN, "expected ')' in declarator");
 
     base = parseSuffix(base);
+    if (!base)
+      return nullptr;
 
     replacePlaceholder(inner, placeholder, base);
     return inner;
@@ -352,7 +376,7 @@ Type *Parser::parseDeclarator(Type *base, std::string &nameOut) {
 }
 
 Type *Parser::parseSuffix(Type *base) {
-  while (true) {
+  while (base) {
     if (check(TokenKind::L_BRACKET)) {
       base = parseArrayType(base);
     } else if (check(TokenKind::L_PAREN)) {
@@ -379,6 +403,7 @@ Type *Parser::parseArrayType(Type *elemType) {
 Type *Parser::parseFuncType(Type *retType) {
   expect(TokenKind::L_PAREN, "expected '('");
   std::vector<Type *> params;
+  std::vector<ParamDecl *> paramDecls;
   bool variadic = false;
 
   if (!check(TokenKind::R_PAREN)) {
@@ -391,18 +416,34 @@ Type *Parser::parseFuncType(Type *retType) {
           variadic = true;
           break;
         }
+        SourceLoc paramLoc = _cur.loc;
         Type *ptype = parseTypeSpec();
+        if (!ptype) {
+          error(_cur.loc, "expected parameter type");
+          return nullptr;
+        }
         Qualifiers pq = parseQualifiers();
         ptype->quals = pq;
         std::string pname;
         ptype = parseDeclarator(ptype, pname);
+        if (!ptype)
+          return nullptr;
         params.push_back(ptype);
+        auto *param = new ParamDecl();
+        param->loc = paramLoc;
+        param->name = pname;
+        param->type = ptype;
+        paramDecls.push_back(param);
       } while (match(TokenKind::COMMA));
     }
   }
 
   expect(TokenKind::R_PAREN, "expected ')'");
-  return Type::makeFunction(retType, std::move(params), variadic);
+  if (_diag.hasErrors())
+    return nullptr;
+  Type *function = Type::makeFunction(retType, std::move(params), variadic);
+  _functionParams.emplace(function, std::move(paramDecls));
+  return function;
 }
 
 FuncDecl *Parser::parseFuncDecl(Type *retType, const std::string &name,
@@ -411,6 +452,9 @@ FuncDecl *Parser::parseFuncDecl(Type *retType, const std::string &name,
   fn->loc = loc;
   fn->name = name;
   fn->type = retType;
+  const auto params = _functionParams.find(retType);
+  if (params != _functionParams.end())
+    fn->params = params->second;
 
   if (check(TokenKind::L_BRACE)) {
     fn->body = parseCompoundStmt();

@@ -133,6 +133,31 @@ void testLineComments() {
   }
 }
 
+void testStringEscapes() {
+  struct Case { const char *source; std::string decoded; };
+  const Case cases[] = {
+      {R"c("a\nb")c", "a\nb"},
+      {R"c("\t\r\0")c", std::string("\t\r\0", 3)},
+      {R"c("\\\"\'")c", "\\\"'"},
+      {R"c("plain // text")c", "plain // text"},
+      {R"c("")c", ""},
+  };
+  for (const auto &test : cases) {
+    const std::string source = test.source;
+    std::ostringstream output;
+    DiagnosticEngine diagnostics("test.c", source, output);
+    Lexer lexer(source, "test.c", diagnostics);
+    const auto tokens = lexer.tokenizeAll();
+    check(tokens.size() == 2 && tokens[0].kind == TokenKind::STRING_LIT &&
+          tokens[1].isEof(), "incorrect string literal token sequence");
+    check(tokens[0].str_val == test.decoded, "incorrect decoded string bytes");
+    check(tokens[0].text == source.substr(1, source.size() - 2),
+          "raw string spelling was not preserved");
+    check(!diagnostics.hasErrors() && output.str().empty(),
+          "valid string literal produced diagnostics");
+  }
+}
+
 void testLevelsAndColor() {
   std::ostringstream plain;
   DiagnosticEngine diagnostics("test.c", "x", plain);
@@ -190,6 +215,7 @@ int main() {
     testLocations();
     testNumbers();
     testLineComments();
+    testStringEscapes();
     testLevelsAndColor();
     testRenderingBounds();
     testPeek();

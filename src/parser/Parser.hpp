@@ -31,6 +31,8 @@ private:
   Token _peek;
 
   std::unordered_map<std::string, Type *> _typedefs;
+  // Each nested function declarator has its own parameter declarations.
+  std::unordered_map<Type *, std::vector<ParamDecl *>> _functionParams;
 
   Token advance();
   Token expect(TokenKind k, const char *msg);

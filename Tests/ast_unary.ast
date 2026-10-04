@@ -1,0 +1,12 @@
+TranslationUnit
+  FuncDecl unary
+    ParamDecl p
+    ParamDecl x
+    CompoundStmt
+      ReturnStmt
+        BinaryExpr +
+          UnaryExpr -
+            UnaryExpr *
+              IdentExpr p
+          UnaryExpr post++
+            IdentExpr x

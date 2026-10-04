@@ -218,13 +218,14 @@ Token Lexer::lexString() {
   SourceLoc tmp = loc();
   std::string s;
   advance();
+  const size_t contentStart = _pos;
 
   while (_pos < _src.size() && cur() != '"') {
     if (cur() == '\0' || cur() == '\n')
       return Error("unterminated string literal", tmp);
     if (cur() == '\\') {
       SourceLoc escape = loc();
-      s += advance();
+      advance();
       switch (cur()) {
       case 'n':
         s += '\n';
@@ -264,10 +265,11 @@ Token Lexer::lexString() {
 
   if (cur() != '"')
     return Error("unterminated string literal", tmp);
+  const std::string text = _src.substr(contentStart, _pos - contentStart);
   advance();
 
-  Token tok(TokenKind::STRING_LIT, s, tmp);
-  tok.str_val = s;
+  Token tok(TokenKind::STRING_LIT, text, tmp);
+  tok.str_val = std::move(s);
   return tok;
 }
 

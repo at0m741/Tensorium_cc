@@ -1,0 +1,8 @@
+TranslationUnit
+  VarDecl data
+  FuncDecl read
+    CompoundStmt
+      ReturnStmt
+        IndexExpr
+          IdentExpr data
+          IntLitExpr 1

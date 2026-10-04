@@ -1,0 +1,5 @@
+TranslationUnit
+  FuncDecl pointer_size
+    CompoundStmt
+      ReturnStmt
+        SizeofExpr type int*

@@ -1,0 +1,12 @@
+TranslationUnit
+  VarDecl data
+  FuncDecl sizes
+    CompoundStmt
+      ReturnStmt
+        BinaryExpr +
+          SizeofExpr expr
+            IdentExpr data
+          SizeofExpr expr
+            IndexExpr
+              IdentExpr data
+              IntLitExpr 1

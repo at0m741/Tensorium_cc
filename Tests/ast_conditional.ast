@@ -1,11 +1,11 @@
 TranslationUnit
-  TypedefDecl math_cb
-  VarDecl compute
-  FuncDecl add_scaled
+  FuncDecl choose
     ParamDecl a
     ParamDecl b
+    ParamDecl c
     CompoundStmt
       ReturnStmt
-        BinaryExpr +
+        TernaryExpr
           IdentExpr a
           IdentExpr b
+          IdentExpr c

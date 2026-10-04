@@ -19,8 +19,14 @@ Expr *Parser::parseExpr(int minPrec) {
       tern->cond = lhs;
       advance();
       tern->then = parseExpr();
+      if (!tern->then)
+        return nullptr;
       expect(TokenKind::COLON, "expected ':' in conditional expression");
+      if (_diag.hasErrors())
+        return nullptr;
       tern->els = parseExpr(ternaryPrec());
+      if (!tern->els)
+        return nullptr;
       lhs = tern;
       continue;
     }
@@ -146,6 +152,8 @@ Expr *Parser::parseUnary() {
           ty->quals = q;
           std::string dummy;
           ty = parseDeclarator(ty, dummy);
+          if (!ty)
+            return nullptr;
           sz->ofType = true;
           sz->type = ty;
         }
@@ -208,7 +216,11 @@ Expr *Parser::parsePrimary() {
   case TokenKind::L_PAREN: {
     advance();
     Expr *expr = parseExpr();
+    if (!expr)
+      return nullptr;
     expect(TokenKind::R_PAREN, "expected ')' after expression");
+    if (_diag.hasErrors())
+      return nullptr;
     return expr;
   }
   default:
@@ -228,11 +240,17 @@ Expr *Parser::parsePostfix(Expr *base) {
       call->callee = base;
       if (!check(TokenKind::R_PAREN)) {
         do {
-          Expr *arg = parseExpr();
+          // Separating commas have lower precedence than assignments.
+          // Grouping and conditional middle operands still admit comma operators.
+          Expr *arg = parseExpr(infixPrec(TokenKind::ASSIGN));
+          if (!arg)
+            return nullptr;
           call->args.push_back(arg);
         } while (match(TokenKind::COMMA));
       }
       expect(TokenKind::R_PAREN, "expected ')' in call expression");
+      if (_diag.hasErrors())
+        return nullptr;
       base = call;
       continue;
     }

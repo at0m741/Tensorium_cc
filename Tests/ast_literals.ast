@@ -1,0 +1,15 @@
+TranslationUnit
+  FuncDecl letter
+    CompoundStmt
+      ReturnStmt
+        CharLitExpr 'a'
+  FuncDecl text
+    CompoundStmt
+      ReturnStmt
+        StringLitExpr "hello\n"
+  FuncDecl fraction
+    CompoundStmt
+      ReturnStmt
+        BinaryExpr +
+          FloatLitExpr 0.5
+          FloatLitExpr 1

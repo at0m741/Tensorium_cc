@@ -306,6 +306,43 @@ bool rejects_incomplete_return_expression() {
                                     "expected expression", 2, 14);
 }
 
+bool rejects_malformed_parameter_lists() {
+  struct Case {
+    const char *source;
+    uint32_t col;
+  };
+  const Case cases[] = {
+      {"int broken(,) {}", 12},
+      {"int broken(int a,) {}", 18},
+      {"int (*broken)(,);", 15},
+      {"typedef int (*broken)(,);", 23},
+      {"int broken(int (*callback)(,)) {}", 28},
+      {"int (*broken(int (*callback)(,)))(int);", 30},
+      {"int (broken(,));", 13},
+      {"int broken([2]);", 12},
+      {"int broken(());", 12},
+  };
+
+  for (const auto &test : cases) {
+    ParserTestContext ctx(test.source);
+    auto *tu = ctx.parser.parse();
+    TEST_EXPECT(tu != nullptr);
+    TEST_EXPECT(tu->decls.empty());
+    TEST_EXPECT(ctx.diag.errorCount() == 1);
+    const auto &diagnostic = ctx.diag.diagnostics().front();
+    TEST_EXPECT(diagnostic.message == "expected parameter type");
+    TEST_EXPECT(diagnostic.line == 1);
+    TEST_EXPECT(diagnostic.col == test.col);
+  }
+  return true;
+}
+
+bool rejects_malformed_sizeof_function_type() {
+  return checks_function_body_error(
+      "int broken() { return sizeof(int (*)(,)); }",
+      "expected parameter type", 1, 38);
+}
+
 FuncDecl *findFunction(TranslationUnit *tu, const std::string &name) {
   for (auto *decl : tu->decls)
     if (auto *fn = dynamic_cast<FuncDecl *>(decl))
@@ -354,6 +391,57 @@ bool preserves_parenthesized_comma_argument() {
   return true;
 }
 
+bool parses_call_argument_boundaries() {
+  struct Case { const char *source; size_t count; };
+  const Case cases[] = {
+      {"empty()", 0},
+      {"sum(1, 2, 3)", 3},
+      {"sum(a = 1, b = 2)", 2},
+      {"sum((1, 2), 3)", 2},
+      {"outer(inner(1, 2), 3)", 2},
+  };
+  for (const auto &test : cases) {
+    ParserTestContext ctx(test.source);
+    auto *call = dynamic_cast<CallExpr *>(ctx.helper.parseExpr());
+    TEST_EXPECT(call != nullptr);
+    TEST_EXPECT(!ctx.diag.hasErrors());
+    TEST_EXPECT(call->args.size() == test.count);
+    TEST_EXPECT(ctx.helper.currentKind() == TokenKind::END_OF_FILE);
+  }
+  return true;
+}
+
+bool preserves_conditional_comma_argument() {
+  ParserTestContext ctx("sum(flag ? 1, 2 : 3, 4)");
+  auto *call = dynamic_cast<CallExpr *>(ctx.helper.parseExpr());
+  TEST_EXPECT(call != nullptr && call->args.size() == 2);
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  auto *conditional = dynamic_cast<TernaryExpr *>(call->args[0]);
+  TEST_EXPECT(conditional != nullptr);
+  auto *comma = dynamic_cast<BinaryExpr *>(conditional->then);
+  TEST_EXPECT(comma != nullptr && comma->op == BinaryOp::COMMA);
+  auto *last = dynamic_cast<IntLitExpr *>(call->args[1]);
+  TEST_EXPECT(last != nullptr && last->val == 4);
+  TEST_EXPECT(ctx.helper.currentKind() == TokenKind::END_OF_FILE);
+  return true;
+}
+
+bool rejects_malformed_call_arguments() {
+  for (const char *source : {"sum(1,)", "sum(,1)", "sum((1,))",
+                             "sum(1 ? : 2, 3)"}) {
+    ParserTestContext ctx(source);
+    TEST_EXPECT(ctx.helper.parseExpr() == nullptr);
+    TEST_EXPECT(ctx.diag.errorCount() == 1);
+    TEST_EXPECT(ctx.diag.diagnostics().front().message == "expected expression");
+  }
+  ParserTestContext missingSeparator("sum(1 2)");
+  TEST_EXPECT(missingSeparator.helper.parseExpr() == nullptr);
+  TEST_EXPECT(missingSeparator.diag.errorCount() == 1);
+  TEST_EXPECT(missingSeparator.diag.diagnostics().front().message ==
+              "expected ')' in call expression");
+  return true;
+}
+
 bool preserves_function_parameter_names() {
   ParserTestContext ctx(readTestSource("ast_assignments.c"));
   auto *tu = ctx.parser.parse();
@@ -368,6 +456,41 @@ bool preserves_function_parameter_names() {
   return true;
 }
 
+bool preserves_nested_function_parameters() {
+  ParserTestContext ctx(
+      "int apply(int (*callback)(int nested), int tail);\n"
+      "int prototype(int, float named);\n"
+      "int (*factory(int seed))(int value);\n"
+      "int variadic(int first, ...);\n"
+      "int empty(void);\n");
+  auto *tu = ctx.parser.parse();
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  TEST_EXPECT(tu->decls.size() == 5);
+  auto *apply = findFunction(tu, "apply");
+  TEST_EXPECT(apply != nullptr && apply->params.size() == 2);
+  TEST_EXPECT(apply->params[0]->name == "callback");
+  TEST_EXPECT(apply->params[1]->name == "tail");
+  TEST_EXPECT(apply->params[0]->type == apply->type->params[0]);
+  TEST_EXPECT(apply->params[0]->type->isPointer());
+  TEST_EXPECT(apply->params[0]->type->pointee->isFunction());
+  TEST_EXPECT(apply->params[0]->loc.line == 1 && apply->params[0]->loc.col == 11);
+  auto *prototype = findFunction(tu, "prototype");
+  TEST_EXPECT(prototype != nullptr && prototype->params.size() == 2);
+  TEST_EXPECT(prototype->params[0]->name.empty());
+  TEST_EXPECT(prototype->params[1]->name == "named");
+  auto *factory = findFunction(tu, "factory");
+  TEST_EXPECT(factory != nullptr && factory->params.size() == 1);
+  TEST_EXPECT(factory->params[0]->name == "seed");
+  TEST_EXPECT(factory->type->retType->isPointer());
+  TEST_EXPECT(factory->type->retType->pointee->isFunction());
+  auto *variadic = findFunction(tu, "variadic");
+  TEST_EXPECT(variadic != nullptr && variadic->type->variadic);
+  TEST_EXPECT(variadic->params.size() == 1 && variadic->params[0]->name == "first");
+  auto *empty = findFunction(tu, "empty");
+  TEST_EXPECT(empty != nullptr && empty->params.empty());
+  return true;
+}
+
 bool preserves_tag_declarations() {
   ParserTestContext ctx(readTestSource("mixed_structs.c"));
   auto *tu = ctx.parser.parse();
@@ -377,6 +500,12 @@ bool preserves_tag_declarations() {
   TEST_EXPECT(dynamic_cast<StructDecl *>(tu->decls[0]) != nullptr);
   TEST_EXPECT(dynamic_cast<UnionDecl *>(tu->decls[1]) != nullptr);
   TEST_EXPECT(dynamic_cast<EnumDecl *>(tu->decls[2]) != nullptr);
+  TEST_EXPECT(tu->decls[0]->name == "Foo" && tu->decls[0]->type->kind == Type::STRUCT);
+  TEST_EXPECT(tu->decls[1]->name == "Bar" && tu->decls[1]->type->kind == Type::UNION);
+  TEST_EXPECT(tu->decls[2]->name == "Color" && tu->decls[2]->type->kind == Type::ENUM);
+  TEST_EXPECT(tu->decls[3]->name == "foo_ptr");
+  TEST_EXPECT(tu->decls[4]->name == "value");
+  TEST_EXPECT(tu->decls[5]->name == "shade");
   return true;
 }
 
@@ -444,9 +573,15 @@ int main() {
       {"rejects_return_without_semicolon", rejects_return_without_semicolon},
       {"rejects_unclosed_function_body", rejects_unclosed_function_body},
       {"rejects_incomplete_return_expression", rejects_incomplete_return_expression},
+      {"rejects_malformed_parameter_lists", rejects_malformed_parameter_lists},
+      {"rejects_malformed_sizeof_function_type", rejects_malformed_sizeof_function_type},
       {"parses_two_call_arguments", parses_two_call_arguments},
       {"preserves_parenthesized_comma_argument", preserves_parenthesized_comma_argument},
+      {"parses_call_argument_boundaries", parses_call_argument_boundaries},
+      {"preserves_conditional_comma_argument", preserves_conditional_comma_argument},
+      {"rejects_malformed_call_arguments", rejects_malformed_call_arguments},
       {"preserves_function_parameter_names", preserves_function_parameter_names},
+      {"preserves_nested_function_parameters", preserves_nested_function_parameters},
       {"preserves_tag_declarations", preserves_tag_declarations},
       {"decodes_string_literal_escape", decodes_string_literal_escape},
       {"dumps_parsed_expression_nodes", dumps_parsed_expression_nodes},

@@ -1,0 +1,11 @@
+TranslationUnit
+  FuncDecl identity
+    ParamDecl value
+  FuncDecl main
+    CompoundStmt
+      ReturnStmt
+        CallExpr
+          IdentExpr identity
+          BinaryExpr ,
+            IntLitExpr 1
+            IntLitExpr 2

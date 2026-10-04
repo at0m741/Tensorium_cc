@@ -1,0 +1,9 @@
+TranslationUnit
+  FuncDecl escapes
+    CompoundStmt
+      ReturnStmt
+        StringLitExpr "a\n\t\r\0\\\""
+  FuncDecl newline
+    CompoundStmt
+      ReturnStmt
+        CharLitExpr '\n'
