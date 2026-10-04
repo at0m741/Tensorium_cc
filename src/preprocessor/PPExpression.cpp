@@ -53,16 +53,26 @@ private:
     return true;
   }
   static int precedence(const std::string &op) {
-    if (op == "||") return 1;
-    if (op == "&&") return 2;
-    if (op == "|") return 3;
-    if (op == "^") return 4;
-    if (op == "&") return 5;
-    if (op == "==" || op == "!=") return 6;
-    if (op == "<" || op == "<=" || op == ">" || op == ">=") return 7;
-    if (op == "<<" || op == ">>") return 8;
-    if (op == "+" || op == "-") return 9;
-    if (op == "*" || op == "/" || op == "%") return 10;
+    if (op == "||")
+      return 1;
+    if (op == "&&")
+      return 2;
+    if (op == "|")
+      return 3;
+    if (op == "^")
+      return 4;
+    if (op == "&")
+      return 5;
+    if (op == "==" || op == "!=")
+      return 6;
+    if (op == "<" || op == "<=" || op == ">" || op == ">=")
+      return 7;
+    if (op == "<<" || op == ">>")
+      return 8;
+    if (op == "+" || op == "-")
+      return 9;
+    if (op == "*" || op == "/" || op == "%")
+      return 10;
     return 0;
   }
 
@@ -72,14 +82,17 @@ private:
       const uint64_t value = std::stoull(token.text, &end, 0);
       std::string suffix = token.text.substr(end);
       for (auto &ch : suffix)
-        if (ch >= 'A' && ch <= 'Z') ch += 'a' - 'A';
+        if (ch >= 'A' && ch <= 'Z')
+          ch += 'a' - 'A';
       if (suffix != "" && suffix != "u" && suffix != "l" && suffix != "ll" &&
-          suffix != "ul" && suffix != "lu" && suffix != "ull" && suffix != "llu") {
+          suffix != "ul" && suffix != "lu" && suffix != "ull" &&
+          suffix != "llu") {
         error("expected integer constant in #if expression");
         return {};
       }
       bool isUnsigned = suffix.find('u') != std::string::npos;
-      if (!isUnsigned && value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+      if (!isUnsigned &&
+          value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
         if (token.text[0] != '0') {
           error("integer constant is out of range in #if expression");
           return {};
@@ -106,19 +119,25 @@ private:
       return {};
     }
     const auto &token = _tokens[_pos];
-    if (token.text == "+" || token.text == "-" || token.text == "!" || token.text == "~") {
+    if (token.text == "+" || token.text == "-" || token.text == "!" ||
+        token.text == "~") {
       const auto op = token.text;
       ++_pos;
       auto value = unary(evaluate);
-      if (op == "!") return {evaluate && value.bits == 0 ? uint64_t(1) : uint64_t(0), false};
-      if (!evaluate) return {0, value.unsignedValue};
-      if (op == "-") value.bits = uint64_t(0) - value.bits;
-      if (op == "~") value.bits = ~value.bits;
+      if (op == "!")
+        return {evaluate && value.bits == 0 ? uint64_t(1) : uint64_t(0), false};
+      if (!evaluate)
+        return {0, value.unsignedValue};
+      if (op == "-")
+        value.bits = uint64_t(0) - value.bits;
+      if (op == "~")
+        value.bits = ~value.bits;
       return value;
     }
     if (match("(")) {
       auto value = conditional(evaluate);
-      if (!match(")")) error("expected ')' in #if expression");
+      if (!match(")"))
+        error("expected ')' in #if expression");
       return value;
     }
     if (token.kind == PPToken::Number) {
@@ -147,47 +166,70 @@ private:
     const bool logical = op == "&&" || op == "||" || op == "==" || op == "!=" ||
                          op == "<" || op == "<=" || op == ">" || op == ">=";
     const bool shift = op == "<<" || op == ">>";
-    const bool isUnsigned = shift ? left.unsignedValue : left.unsignedValue || right.unsignedValue;
+    const bool isUnsigned =
+        shift ? left.unsignedValue : left.unsignedValue || right.unsignedValue;
     if (!evaluate)
       return {0, logical ? false : isUnsigned};
-    if (op == "&&") return {left.bits != 0 && right.bits != 0 ? uint64_t(1) : uint64_t(0), false};
-    if (op == "||") return {left.bits != 0 || right.bits != 0 ? uint64_t(1) : uint64_t(0), false};
-    if (op == "==") return {left.bits == right.bits ? uint64_t(1) : uint64_t(0), false};
-    if (op == "!=") return {left.bits != right.bits ? uint64_t(1) : uint64_t(0), false};
+    if (op == "&&")
+      return {left.bits != 0 && right.bits != 0 ? uint64_t(1) : uint64_t(0),
+              false};
+    if (op == "||")
+      return {left.bits != 0 || right.bits != 0 ? uint64_t(1) : uint64_t(0),
+              false};
+    if (op == "==")
+      return {left.bits == right.bits ? uint64_t(1) : uint64_t(0), false};
+    if (op == "!=")
+      return {left.bits != right.bits ? uint64_t(1) : uint64_t(0), false};
     if (op == "<" || op == "<=" || op == ">" || op == ">=") {
-      const bool less = isUnsigned ? left.bits < right.bits : left.signedValue() < right.signedValue();
+      const bool less = isUnsigned ? left.bits < right.bits
+                                   : left.signedValue() < right.signedValue();
       const bool equal = left.bits == right.bits;
-      const bool result = op == "<" ? less : op == "<=" ? less || equal :
-                          op == ">" ? !less && !equal : !less;
+      const bool result = op == "<"    ? less
+                          : op == "<=" ? less || equal
+                          : op == ">"  ? !less && !equal
+                                       : !less;
       return {result ? uint64_t(1) : uint64_t(0), false};
     }
-    if (op == "+") return {left.bits + right.bits, isUnsigned};
-    if (op == "-") return {left.bits - right.bits, isUnsigned};
-    if (op == "*") return {left.bits * right.bits, isUnsigned};
-    if (op == "&") return {left.bits & right.bits, isUnsigned};
-    if (op == "|") return {left.bits | right.bits, isUnsigned};
-    if (op == "^") return {left.bits ^ right.bits, isUnsigned};
+    if (op == "+")
+      return {left.bits + right.bits, isUnsigned};
+    if (op == "-")
+      return {left.bits - right.bits, isUnsigned};
+    if (op == "*")
+      return {left.bits * right.bits, isUnsigned};
+    if (op == "&")
+      return {left.bits & right.bits, isUnsigned};
+    if (op == "|")
+      return {left.bits | right.bits, isUnsigned};
+    if (op == "^")
+      return {left.bits ^ right.bits, isUnsigned};
     if (shift) {
       if (right.bits >= 64) {
         error("invalid shift count in #if expression", loc);
         return {};
       }
-      if (op == "<<") return {left.bits << right.bits, isUnsigned};
-      return {isUnsigned ? left.bits >> right.bits :
-              static_cast<uint64_t>(left.signedValue() >> right.bits), isUnsigned};
+      if (op == "<<")
+        return {left.bits << right.bits, isUnsigned};
+      return {isUnsigned
+                  ? left.bits >> right.bits
+                  : static_cast<uint64_t>(left.signedValue() >> right.bits),
+              isUnsigned};
     }
     if (right.bits == 0) {
       error("division by zero in #if expression", loc);
       return {};
     }
     if (isUnsigned)
-      return {op == "/" ? left.bits / right.bits : left.bits % right.bits, true};
-    if (left.signedValue() == std::numeric_limits<int64_t>::min() && right.signedValue() == -1) {
+      return {op == "/" ? left.bits / right.bits : left.bits % right.bits,
+              true};
+    if (left.signedValue() == std::numeric_limits<int64_t>::min() &&
+        right.signedValue() == -1) {
       error("integer overflow in #if expression", loc);
       return {};
     }
-    return {static_cast<uint64_t>(op == "/" ? left.signedValue() / right.signedValue()
-                                           : left.signedValue() % right.signedValue()), false};
+    return {static_cast<uint64_t>(
+                op == "/" ? left.signedValue() / right.signedValue()
+                          : left.signedValue() % right.signedValue()),
+            false};
   }
 
   Value binary(int minimum, bool evaluate) {
@@ -195,7 +237,8 @@ private:
     while (!_diag.hasErrors() && _pos < _tokens.size()) {
       const auto op = _tokens[_pos].text;
       const int prec = precedence(op);
-      if (prec < minimum) break;
+      if (prec < minimum)
+        break;
       const auto loc = _tokens[_pos].loc;
       ++_pos;
       const bool rightActive = evaluate && !(op == "&&" && left.bits == 0) &&
@@ -215,7 +258,8 @@ private:
     auto value = binary(1, evaluate);
     if (!_diag.hasErrors() && match("?")) {
       const auto then = conditional(evaluate && value.bits != 0);
-      if (!match(":")) error("expected ':' in #if expression");
+      if (!match(":"))
+        error("expected ':' in #if expression");
       const auto otherwise = conditional(evaluate && value.bits == 0);
       return {value.bits != 0 ? then.bits : otherwise.bits,
               then.unsignedValue || otherwise.unsignedValue};

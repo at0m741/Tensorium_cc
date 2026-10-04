@@ -17,3 +17,6 @@ build/
 # clangd
 .cache/
 .idea/
+
+# CTest output generated in the source directory
+/Testing/
