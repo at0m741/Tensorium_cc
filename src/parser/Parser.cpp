@@ -3,7 +3,7 @@
 #include "Type.hpp"
 #include <cmath>
 
-Parser::Parser(Lexer &lexer, TypePool &types, DiagnosticEngine &diag,
+Parser::Parser(TokenSource &lexer, TypePool &types, DiagnosticEngine &diag,
                const TargetInfo &target, const LangOptions &opts)
     : lex(lexer), types(types), _diag(diag), target(target), opts(opts) {
   _cur = lex.next();

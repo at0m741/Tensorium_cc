@@ -1,0 +1,10 @@
+TranslationUnit
+  VarDecl header_value
+  VarDecl nested_value
+  VarDecl once_value
+  FuncDecl main
+    CompoundStmt
+      ReturnStmt
+        BinaryExpr +
+          IntLitExpr 6
+          IntLitExpr 1

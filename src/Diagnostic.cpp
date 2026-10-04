@@ -53,11 +53,24 @@ const char *levelColor(DiagnosticLevel level) {
 
 DiagnosticEngine::DiagnosticEngine(std::string filename, std::string source,
                                    std::ostream &output, DiagnosticColor color)
-    : _filename(std::move(filename)), _source(std::move(source)),
-      _output(output), _useColor(useColor(output, color)), _lineStarts{0} {
-  for (size_t i = 0; i < _source.size(); ++i)
-    if (_source[i] == '\n')
-      _lineStarts.push_back(i + 1);
+    : _filename(std::move(filename)), _output(output),
+      _useColor(useColor(output, color)) {
+  addSource(_filename, source);
+}
+
+void DiagnosticEngine::addSource(const std::string &filename,
+                                  const std::string &source) {
+  SourceText entry{source, {0}};
+  for (size_t i = 0; i < source.size(); ++i) {
+    if (source[i] == '\r') {
+      if (i + 1 < source.size() && source[i + 1] == '\n')
+        ++i;
+      entry.lineStarts.push_back(i + 1);
+    } else if (source[i] == '\n') {
+      entry.lineStarts.push_back(i + 1);
+    }
+  }
+  _sources[filename] = std::move(entry);
 }
 
 void DiagnosticEngine::report(DiagnosticLevel level, SourceLoc loc,
@@ -84,17 +97,17 @@ void DiagnosticEngine::render(const Diagnostic &diagnostic) {
   _output << levelName(diagnostic.level) << ": " << reset
           << bold << diagnostic.message << reset << '\n';
 
-  if (diagnostic.filename != _filename || diagnostic.line == 0 ||
-      diagnostic.line > _lineStarts.size() || diagnostic.col == 0)
+  const auto entry = _sources.find(diagnostic.filename);
+  if (entry == _sources.end() || diagnostic.line == 0 ||
+      diagnostic.line > entry->second.lineStarts.size() || diagnostic.col == 0)
     return;
 
-  const size_t start = _lineStarts[diagnostic.line - 1];
-  size_t end = _source.find('\n', start);
+  const auto &source = entry->second.text;
+  const size_t start = entry->second.lineStarts[diagnostic.line - 1];
+  size_t end = source.find_first_of("\r\n", start);
   if (end == std::string::npos)
-    end = _source.size();
-  if (end > start && _source[end - 1] == '\r')
-    --end;
-  const std::string line = _source.substr(start, end - start);
+    end = source.size();
+  const std::string line = source.substr(start, end - start);
   const size_t column = std::min(size_t(diagnostic.col - 1), line.size());
   const size_t span = std::min(diagnostic.length, line.size() - column);
 

@@ -47,6 +47,13 @@ cc1_add_module(cc1_lexer
 )
 target_link_libraries(cc1_lexer PUBLIC cc1_diagnostics)
 
+cc1_add_module(cc1_preprocessor
+  src/SourceManager.cpp
+  src/preprocessor/Preprocessor.cpp
+  src/preprocessor/PPExpression.cpp
+)
+target_link_libraries(cc1_preprocessor PUBLIC cc1_lexer)
+
 cc1_add_module(cc1_parser
   src/parser/Parser.cpp
   src/parser/Pratt.cpp
@@ -66,7 +73,7 @@ cc1_add_module(cc1_codegen
 target_link_libraries(cc1_codegen PUBLIC cc1_sema)
 
 add_library(cc1_frontend INTERFACE)
-target_link_libraries(cc1_frontend INTERFACE cc1_codegen)
+target_link_libraries(cc1_frontend INTERFACE cc1_codegen cc1_preprocessor)
 
 add_executable(cc1
   src/main.cpp

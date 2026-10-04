@@ -1,5 +1,24 @@
 add_subdirectory(parser)
 
+add_executable(cc1_preprocessor_tests PreprocessorTests.cpp)
+target_compile_definitions(cc1_preprocessor_tests
+  PRIVATE CC1_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}/Tests"
+)
+target_link_libraries(cc1_preprocessor_tests
+  PRIVATE cc1_preprocessor cc1_parser cc1_project_options cc1_warnings
+)
+add_test(NAME preprocessor COMMAND cc1_preprocessor_tests)
+set_tests_properties(preprocessor PROPERTIES TIMEOUT 10)
+
+add_test(NAME preprocessor_cli
+  COMMAND ${CMAKE_COMMAND}
+    -DCC1=$<TARGET_FILE:cc1>
+    -DTEST_DIR=${CMAKE_CURRENT_SOURCE_DIR}/preprocessor
+    -DSCRATCH_DIR=${CMAKE_CURRENT_BINARY_DIR}/preprocessor-cli
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckPreprocessorCLI.cmake
+)
+set_tests_properties(preprocessor_cli PROPERTIES TIMEOUT 10)
+
 add_executable(cc1_diagnostic_tests DiagnosticTests.cpp)
 target_link_libraries(cc1_diagnostic_tests
   PRIVATE cc1_lexer cc1_project_options cc1_warnings
@@ -32,7 +51,8 @@ foreach(FIXTURE IN ITEMS function_body basic_decls function_pointer
                          prototype_and_definition void_return ast_grouping ast_assignments
                          ast_unary ast_conditional ast_calls ast_comma_argument ast_index
                          ast_member ast_sizeof ast_literals mixed_structs
-                         ast_escaped_literals ast_sizeof_expr ast_member_dot ast_unary_ops)
+                         ast_escaped_literals ast_sizeof_expr ast_member_dot ast_unary_ops
+                         preprocessor/program)
   add_test(NAME cli_ast_${FIXTURE}
     COMMAND ${CMAKE_COMMAND}
       -DCC1=$<TARGET_FILE:cc1>

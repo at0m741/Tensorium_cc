@@ -1,10 +1,12 @@
 #include "cc1/Diagnostic.hpp"
 #include "cc1/LangOptions.hpp"
 #include "cc1/TargetInfo.hpp"
+#include "cc1/SourceManager.hpp"
 #include "lexer/Lexer.hpp"
 #include "lexer/Token.hpp"
 #include "parser/ASTDump.hpp"
 #include "parser/Parser.hpp"
+#include "preprocessor/Preprocessor.hpp"
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -14,6 +16,8 @@ int main(int argc, char **argv) {
   DiagnosticColor color = DiagnosticColor::Auto;
   bool dumpTokens = false;
   bool dumpAst = false;
+  bool preprocessOnly = false;
+  std::vector<std::string> includeDirs;
   const char *filename = nullptr;
   bool options = true;
   for (int i = 1; i < argc; ++i) {
@@ -28,6 +32,19 @@ int main(int argc, char **argv) {
       dumpTokens = true;
     } else if (options && arg == "--dump-ast") {
       dumpAst = true;
+    } else if (options && arg == "-E") {
+      preprocessOnly = true;
+    } else if (options && (arg == "-I" || arg.rfind("-I", 0) == 0)) {
+      if (arg == "-I") {
+        if (i + 1 == argc) {
+          DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
+          diagnostics.error({}, "expected directory after -I");
+          return 1;
+        }
+        includeDirs.emplace_back(argv[++i]);
+      } else {
+        includeDirs.push_back(arg.substr(2));
+      }
     } else if ((options && !arg.empty() && arg[0] == '-') || filename) {
       DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
       diagnostics.error({}, filename ? "expected a single input file"
@@ -40,7 +57,7 @@ int main(int argc, char **argv) {
   if (!filename) {
     DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
     diagnostics.error({}, "no input file");
-    std::cerr << "usage: cc1 [--dump-tokens|--dump-ast] "
+    std::cerr << "usage: cc1 [-E|--dump-tokens|--dump-ast] [-I directory] "
                  "[-fcolor-diagnostics|-fno-color-diagnostics] <file.c>\n";
     return 1;
   }
@@ -48,6 +65,11 @@ int main(int argc, char **argv) {
   if (dumpTokens && dumpAst) {
     DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
     diagnostics.error({}, "--dump-tokens and --dump-ast cannot be combined");
+    return 1;
+  }
+  if (preprocessOnly && (dumpTokens || dumpAst)) {
+    DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
+    diagnostics.error({}, "-E cannot be combined with a dump option");
     return 1;
   }
 
@@ -75,6 +97,16 @@ int main(int argc, char **argv) {
     return 0;
   }
 
+  SourceManager sources(diagnostics);
+  const auto &mainFile = sources.add(filename, src);
+  Preprocessor preprocessor(sources, mainFile, diagnostics, opts, includeDirs);
+  if (!preprocessor.run())
+    return 1;
+  if (preprocessOnly) {
+    std::cout << preprocessor.text();
+    return 0;
+  }
+
   TargetInfo target{};
 #if defined(__aarch64__) || defined(_M_ARM64)
   target = TargetInfo::aarch64();
@@ -87,7 +119,7 @@ int main(int argc, char **argv) {
   return 1;
 #endif
   TypePool types;
-  Parser parser(lexer, types, diagnostics, target, opts);
+  Parser parser(preprocessor, types, diagnostics, target, opts);
   std::unique_ptr<TranslationUnit> unit(parser.parse());
   if (diagnostics.hasErrors())
     return 1;

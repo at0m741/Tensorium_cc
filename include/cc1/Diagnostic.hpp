@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 enum class DiagnosticLevel { Note, Warning, Error, Fatal };
@@ -25,6 +26,7 @@ public:
 
   void report(DiagnosticLevel level, SourceLoc loc, const std::string &message,
               size_t length = 1);
+  void addSource(const std::string &filename, const std::string &source);
   void error(SourceLoc loc, const std::string &message, size_t length = 1) {
     report(DiagnosticLevel::Error, loc, message, length);
   }
@@ -46,10 +48,13 @@ private:
   void render(const Diagnostic &diagnostic);
 
   std::string _filename;
-  std::string _source;
   std::ostream &_output;
   bool _useColor;
   size_t _errorCount = 0;
-  std::vector<size_t> _lineStarts;
+  struct SourceText {
+    std::string text;
+    std::vector<size_t> lineStarts;
+  };
+  std::unordered_map<std::string, SourceText> _sources;
   std::vector<Diagnostic> _diagnostics;
 };

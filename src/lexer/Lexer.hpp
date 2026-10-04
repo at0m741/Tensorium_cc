@@ -1,5 +1,5 @@
 #pragma once
-#include "Token.hpp"
+#include "TokenSource.hpp"
 #include "cc1/Diagnostic.hpp"
 #include "cc1/LangOptions.hpp"
 #include <cstdint>
@@ -9,13 +9,14 @@
 #include <unordered_map>
 #include <vector>
 
-class Lexer {
+class Lexer : public TokenSource {
 public:
   Lexer(const std::string &source, const char *filename,
         DiagnosticEngine &diagnostics,
-        const LangOptions &options = LangOptions::forc99());
+        const LangOptions &options = LangOptions::forc99(),
+        SourceLoc start = {}, std::vector<SourceLoc> sourceLocations = {});
 
-  Token next(); /* Consume and return next token */
+  Token next() override; /* Consume and return next token */
   Token peek(); /* lookup, but don't consume (il est punis miskine) */
 	
   /* Just for debuging and Tests (the fun part) */
@@ -26,6 +27,7 @@ private:
   const char *_filename;
   DiagnosticEngine &_diagnostics;
   bool _allowLineComments;
+  std::vector<SourceLoc> _sourceLocations;
   size_t _pos = 0;
   uint32_t _col = 1;
   uint32_t _line = 1;

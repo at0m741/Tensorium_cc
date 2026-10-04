@@ -6,9 +6,12 @@
 #include <unordered_map>
 
 Lexer::Lexer(const std::string &source, const char *filename,
-             DiagnosticEngine &diagnostics, const LangOptions &options)
+             DiagnosticEngine &diagnostics, const LangOptions &options,
+             SourceLoc start, std::vector<SourceLoc> sourceLocations)
     : _src(source), _filename(filename), _diagnostics(diagnostics),
-      _allowLineComments(options.allowLineComments) {}
+      _allowLineComments(options.allowLineComments),
+      _sourceLocations(std::move(sourceLocations)),
+      _col(start.col ? start.col : 1), _line(start.line ? start.line : 1) {}
 
 const std::unordered_map<std::string, TokenKind> Lexer::_keywords = {
     {"auto", TokenKind::KW_AUTO},         {"break", TokenKind::KW_BREAK},
@@ -50,7 +53,11 @@ char Lexer::advance() {
   return c;
 }
 
-SourceLoc Lexer::loc() const { return {_filename, _line, _col}; }
+SourceLoc Lexer::loc() const {
+  if (_pos < _sourceLocations.size())
+    return _sourceLocations[_pos];
+  return {_filename, _line, _col};
+}
 
 Token Lexer::make(TokenKind k, std::string text) {
   return Token(k, std::move(text), loc());

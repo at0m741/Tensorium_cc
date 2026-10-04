@@ -13,7 +13,7 @@ class ParserTestHelper;
 
 class Parser {
 public:
-  Parser(Lexer &lexer, TypePool &types, DiagnosticEngine &diag,
+  Parser(TokenSource &lexer, TypePool &types, DiagnosticEngine &diag,
          const TargetInfo &target, const LangOptions &opts);
 
   TranslationUnit *parse();
@@ -21,7 +21,7 @@ public:
 private:
   friend class ParserTestHelper;
 
-  Lexer &lex;
+  TokenSource &lex;
   TypePool &types;
   DiagnosticEngine &_diag;
   const TargetInfo &target;
