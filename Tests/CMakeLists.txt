@@ -19,6 +19,19 @@ add_test(NAME preprocessor_cli
 )
 set_tests_properties(preprocessor_cli PROPERTIES TIMEOUT 10)
 
+# Optional differential coverage; normal tests do not require Clang or Python.
+find_program(CC1_REFERENCE_CLANG NAMES clang)
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(CC1_REFERENCE_CLANG AND Python3_Interpreter_FOUND)
+  add_test(NAME preprocessor_clang_comparison
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/CompareMacroExpansion.py
+      --cc1 $<TARGET_FILE:cc1>
+      --clang ${CC1_REFERENCE_CLANG}
+      --scratch ${CMAKE_CURRENT_BINARY_DIR}/macro-comparison
+  )
+  set_tests_properties(preprocessor_clang_comparison PROPERTIES TIMEOUT 20)
+endif()
+
 add_executable(cc1_diagnostic_tests DiagnosticTests.cpp)
 target_link_libraries(cc1_diagnostic_tests
   PRIVATE cc1_lexer cc1_project_options cc1_warnings
@@ -52,7 +65,7 @@ foreach(FIXTURE IN ITEMS function_body basic_decls function_pointer
                          ast_unary ast_conditional ast_calls ast_comma_argument ast_index
                          ast_member ast_sizeof ast_literals mixed_structs
                          ast_escaped_literals ast_sizeof_expr ast_member_dot ast_unary_ops
-                         preprocessor/program)
+                         preprocessor/program preprocessor/macros)
   add_test(NAME cli_ast_${FIXTURE}
     COMMAND ${CMAKE_COMMAND}
       -DCC1=$<TARGET_FILE:cc1>

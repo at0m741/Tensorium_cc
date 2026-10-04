@@ -7,12 +7,26 @@
 #include <vector>
 
 struct PPToken {
-  enum Kind { Identifier, Number, String, Character, Header, Punct, Other, Newline };
+  enum Kind {
+    Identifier,
+    Number,
+    String,
+    Character,
+    Header,
+    Punct,
+    Other,
+    Newline
+  };
   Kind kind;
   std::string text;
   SourceLoc loc;
   bool leadingSpace = false;
   std::vector<SourceLoc> spellingLocations;
+  // A suppressed self-reference stays suppressed during later rescans.
+  std::unordered_set<std::string> hideSet = {};
+  std::string originalSpelling = {};
+  // Builtins in a macro body use the end of the invocation; diagnostics keep loc.
+  SourceLoc expansionLoc = {};
 };
 
 class Preprocessor : public TokenSource {
@@ -31,7 +45,15 @@ private:
   DiagnosticEngine &_diag;
   LangOptions _options;
   std::vector<std::string> _includeDirs;
-  std::unordered_map<std::string, std::vector<PPToken>> _macros;
+  struct Macro {
+    bool functionLike = false;
+    bool variadic = false;
+    std::vector<std::string> parameters;
+    std::vector<PPToken> replacement;
+  };
+  std::unordered_map<std::string, Macro> _macros;
+  std::string _date;
+  std::string _time;
   std::unordered_set<const SourceFile *> _once;
   std::unordered_set<const SourceFile *> _visited;
   std::vector<PPToken> _output;
@@ -42,8 +64,13 @@ private:
 
   bool process(const SourceFile &file, unsigned depth, SourceLoc includeLoc);
   bool expand(const std::vector<PPToken> &input, std::vector<PPToken> &output,
-              std::unordered_set<std::string> &disabled, unsigned depth = 0);
-  bool condition(const std::vector<PPToken> &input, SourceLoc loc, bool &result);
+              unsigned depth = 0);
+  bool define(const std::vector<PPToken> &arguments, SourceLoc loc);
+  bool isPredefined(const std::string &name) const;
+  bool isDefined(const std::string &name) const;
+  PPToken predefined(const PPToken &token) const;
+  bool condition(const std::vector<PPToken> &input, SourceLoc loc,
+                 bool &result);
   bool include(const SourceFile &file, std::vector<PPToken> arguments,
                SourceLoc loc, unsigned depth);
 };

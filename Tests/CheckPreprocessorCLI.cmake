@@ -73,3 +73,27 @@ endforeach()
 
 run_case(1 -E --dump-ast "${TEST_DIR}/program.c")
 run_case(1 -I)
+
+run_case(0 "${TEST_DIR}/macros.c")
+run_case(0 -E "${TEST_DIR}/macros.c")
+if(NOT OUTPUT MATCHES "int macro \\( int value \\)" OR
+   NOT OUTPUT MATCHES "return 18 ;" OR NOT DIAGNOSTIC STREQUAL "")
+  message(FATAL_ERROR "Function macros did not reach the CLI:\n${OUTPUT}\n${DIAGNOSTIC}")
+endif()
+
+file(WRITE "${SCRATCH_DIR}/macro_error.c" "#define CAT(a,b) a ## b\nint CAT(name,+);\n")
+foreach(MODE IN ITEMS parse preprocess ast)
+  set(OPTION)
+  if(MODE STREQUAL "preprocess")
+    set(OPTION -E)
+  elseif(MODE STREQUAL "ast")
+    set(OPTION --dump-ast)
+  endif()
+  run_case(1 ${OPTION} "${SCRATCH_DIR}/macro_error.c")
+  string(REGEX MATCHALL "error:" ERRORS "${DIAGNOSTIC}")
+  list(LENGTH ERRORS ERROR_COUNT)
+  if(NOT OUTPUT STREQUAL "" OR NOT ERROR_COUNT EQUAL 1 OR
+     NOT DIAGNOSTIC MATCHES "2:5: error: token paste does not form one preprocessing token")
+    message(FATAL_ERROR "Incorrect macro diagnostic:\n${OUTPUT}\n${DIAGNOSTIC}")
+  endif()
+endforeach()

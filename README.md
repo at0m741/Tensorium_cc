@@ -12,6 +12,7 @@ ctest --test-dir build --output-on-failure
 ./build/cc1 --dump-tokens Tests/function_body.c
 ./build/cc1 --dump-ast Tests/ast_calls.c
 ./build/cc1 -E Tests/preprocessor/program.c
+./build/cc1 --dump-ast Tests/preprocessor/macros.c
 ./build/cc1 -I path/to/headers input.c
 cmake --build build --target ast_audit
 ```
@@ -33,11 +34,27 @@ member access and `sizeof` are parsed. Local declarations and initializers,
 casts and control-flow statements are still unimplemented;
 semantic analysis and code generation remain future work.
 
-The preprocessor supports object-like `#define` macros and `#undef`, nested
+The preprocessor supports object-like and function-like `#define` macros,
+C99 variadic macros (`...`/`__VA_ARGS__`), stringification (`#`), token pasting
+(`##`), and `#undef`, nested
 `#if`/`#ifdef`/`#ifndef`/`#elif`/`#else`/`#endif`, `defined`, integer expressions
 with short-circuit evaluation, `#error`, and `#pragma once`. Backslash-newline
 splicing precedes comment removal. Macro expansion keeps token boundaries and
-suppresses direct and indirect self-reference.
+suppresses direct and indirect self-reference. Arguments are expanded before
+substitution unless stringified or pasted; the result is rescanned with the
+remaining input. Empty arguments and calls spanning ordinary newlines are
+supported. Invalid parameters, argument counts and token pastes are diagnosed.
+Adjacent ordinary string literals are decoded separately and joined before parsing.
+
+Predefined macros include `__FILE__`, `__LINE__`, `__DATE__`, `__TIME__`, `__STDC__`,
+`__STDC_VERSION__` (according to `LangOptions`, absent in C89), and
+`__STDC_HOSTED__` (0: no hosted standard library is provided). The CLI currently
+selects C99, so `__STDC_VERSION__` is `199901L`; this identifies the selected
+language mode, not full C99 support. File and line macros use the invocation
+location, including headers; a function-like macro's body uses the closing
+parenthesis line, while prescanned arguments keep their own lines.
+Standard predefined macros cannot be redefined
+or undefined.
 
 Quoted includes search beside the including file, then the explicit `-I`
 directories; angle-bracket includes search the `-I` directories only. Macros
@@ -46,14 +63,18 @@ and physical-line locations, including headers and continued lines.
 
 `-E` emits token-separated text without line markers or C syntax checking.
 `--dump-tokens` continues to inspect the raw lexer. This is a first preprocessor
-subset: function-like macros, `#`/`##`, `#line`, predefined macros and implicit
-system-header search paths remain unimplemented. Unsupported active directives
+subset: `#line`, command-line macro definitions (`-D`/`-U`), implicit
+system-header search paths, GNU variadic extensions and `__VA_OPT__` remain
+unimplemented. C99 variadic calls with named parameters must include the comma
+before an empty variadic argument. Unsupported active directives
 produce a diagnostic. Wide literals and the full C integer-literal rules are
 also outside the current frontend's supported subset.
 
 CTest checks AST structure and exact dumps. `ast_audit` writes a report to
 `build/ast-audit/report.md`, including deliberately invalid and unsupported
 inputs; generating that report does not mean every input was accepted.
+When Clang and Python are available, CTest also compares deterministic macro
+expansions with Clang's C99 preprocessor, ignoring formatting between tokens.
 
 Diagnostics include the source location, source line and caret. Colors are
 automatic on supported terminals and respect `NO_COLOR`; use

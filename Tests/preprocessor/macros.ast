@@ -1,0 +1,18 @@
+TranslationUnit
+  FuncDecl header_function
+    ParamDecl value
+  FuncDecl macro
+    ParamDecl value
+    CompoundStmt
+      ReturnStmt
+        BinaryExpr +
+          IdentExpr value
+          IntLitExpr 6
+  FuncDecl description
+    CompoundStmt
+      ReturnStmt
+        StringLitExpr "macro: SUM(value, MACRO_BASE)"
+  FuncDecl line
+    CompoundStmt
+      ReturnStmt
+        IntLitExpr 18
