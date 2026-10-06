@@ -39,6 +39,7 @@ private:
   bool check(TokenKind k) const;
   bool match(TokenKind k);
   bool isTypeName() const;
+  bool isTypeName(const Token &token) const;
 
   void error(const SourceLoc &loc, const std::string &msg);
   void syncToNextDecl();

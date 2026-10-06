@@ -1,12 +1,17 @@
 #include "cc1/Diagnostic.hpp"
 #include "cc1/LangOptions.hpp"
-#include "cc1/TargetInfo.hpp"
 #include "cc1/SourceManager.hpp"
+#include "cc1/TargetInfo.hpp"
 #include "lexer/Lexer.hpp"
 #include "lexer/Token.hpp"
 #include "parser/ASTDump.hpp"
 #include "parser/Parser.hpp"
 #include "preprocessor/Preprocessor.hpp"
+#include "sema/Sema.hpp"
+#ifdef CC1_ENABLE_MLIR
+#include "codegen/MLIRGen.hpp"
+#include "llvm/Support/raw_ostream.h"
+#endif
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -16,7 +21,9 @@ int main(int argc, char **argv) {
   DiagnosticColor color = DiagnosticColor::Auto;
   bool dumpTokens = false;
   bool dumpAst = false;
+  bool dumpSema = false;
   bool preprocessOnly = false;
+  bool emitMlir = false;
   std::vector<std::string> includeDirs;
   const char *filename = nullptr;
   bool options = true;
@@ -32,6 +39,17 @@ int main(int argc, char **argv) {
       dumpTokens = true;
     } else if (options && arg == "--dump-ast") {
       dumpAst = true;
+    } else if (options && arg == "--dump-sema") {
+      dumpSema = true;
+    } else if (options && arg == "--emit-mlir") {
+#ifdef CC1_ENABLE_MLIR
+      emitMlir = true;
+#else
+      DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
+      diagnostics.error({}, "MLIR support is disabled; rebuild with "
+                            "-DCC1_ENABLE_MLIR=ON");
+      return 1;
+#endif
     } else if (options && arg == "-E") {
       preprocessOnly = true;
     } else if (options && (arg == "-I" || arg.rfind("-I", 0) == 0)) {
@@ -57,19 +75,23 @@ int main(int argc, char **argv) {
   if (!filename) {
     DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
     diagnostics.error({}, "no input file");
-    std::cerr << "usage: cc1 [-E|--dump-tokens|--dump-ast] [-I directory] "
+    std::cerr << "usage: cc1 "
+                 "[-E|--dump-tokens|--dump-ast|--dump-sema|--emit-mlir] [-I "
+                 "directory] "
                  "[-fcolor-diagnostics|-fno-color-diagnostics] <file.c>\n";
     return 1;
   }
 
-  if (dumpTokens && dumpAst) {
+  if (static_cast<int>(dumpTokens) + static_cast<int>(dumpAst) +
+          static_cast<int>(dumpSema) + static_cast<int>(emitMlir) >
+      1) {
     DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
-    diagnostics.error({}, "--dump-tokens and --dump-ast cannot be combined");
+    diagnostics.error({}, "output options cannot be combined");
     return 1;
   }
-  if (preprocessOnly && (dumpTokens || dumpAst)) {
+  if (preprocessOnly && (dumpTokens || dumpAst || dumpSema || emitMlir)) {
     DiagnosticEngine diagnostics("cc1", "", std::cerr, color);
-    diagnostics.error({}, "-E cannot be combined with a dump option");
+    diagnostics.error({}, "-E cannot be combined with another output option");
     return 1;
   }
 
@@ -124,8 +146,28 @@ int main(int argc, char **argv) {
   if (diagnostics.hasErrors())
     return 1;
 
-  if (dumpAst)
+  if (dumpAst) {
     dumpAST(unit.get(), std::cout);
+    return 0;
+  }
 
+  Sema sema(types, diagnostics, target);
+  if (!sema.analyze(*unit))
+    return 1;
+  if (dumpSema)
+    dumpAST(unit.get(), std::cout, 0, true);
+#ifdef CC1_ENABLE_MLIR
+  if (emitMlir) {
+    mlir::MLIRContext context;
+    MLIRGen generator(context, diagnostics, target);
+
+    auto module = generator.generate(*unit);
+    if (!module)
+      return 1;
+
+    module->print(llvm::outs());
+    llvm::outs() << '\n';
+  }
+#endif
   return 0;
 }

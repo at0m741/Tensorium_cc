@@ -4,4 +4,5 @@
 
 struct Node;
 
-void dumpAST(const Node *node, std::ostream &out, unsigned depth = 0);
+void dumpAST(const Node *node, std::ostream &out, unsigned depth = 0,
+             bool typed = false);

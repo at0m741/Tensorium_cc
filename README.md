@@ -11,13 +11,14 @@ ctest --test-dir build --output-on-failure
 ./build/cc1 Tests/invalid_missing_semicolon.c
 ./build/cc1 --dump-tokens Tests/function_body.c
 ./build/cc1 --dump-ast Tests/ast_calls.c
+./build/cc1 --dump-sema Tests/ast_calls.c
 ./build/cc1 -E Tests/preprocessor/program.c
 ./build/cc1 --dump-ast Tests/preprocessor/macros.c
 ./build/cc1 -I path/to/headers input.c
 cmake --build build --target ast_audit
 ```
 
-By default, `cc1` preprocesses and parses the supported C subset and exits with status 1 on an
+By default, `cc1` preprocesses, parses and semantically checks the supported C subset and exits with status 1 on an
 error, or 0 on success. Valid inputs produce no output; code generation is not
 implemented yet. `--dump-tokens` runs only the lexer and prints the token stream,
 so it does not check syntax.
@@ -25,14 +26,31 @@ so it does not check syntax.
 `--dump-ast` prints declarations, function parameters, blocks, returns and
 supported expressions after successful parsing. String token spelling stays
 separate from decoded bytes; AST literals escape control characters for display.
-No AST is printed when parsing fails.
+No AST is printed when parsing fails. This option stops before semantic analysis,
+so it can inspect syntactically valid inputs with semantic errors.
+
+`--dump-sema` runs the complete frontend and prints expression types, lvalue/value
+categories and inserted implicit conversions. Semantic errors produce source
+diagnostics and status 1 without an AST. The default invocation also runs Sema.
+
+Optional MLIR emission is enabled at build time with `-DCC1_ENABLE_MLIR=ON`
+and an LLVM/MLIR CMake package (`MLIR_DIR` and, if needed, `LLVM_DIR`).
+Run `cc1 --emit-mlir input.c` to request emission after successful Sema.
+The current generator emits and verifies empty modules; declarations still
+produce an explicit unsupported-codegen diagnostic. Without `--emit-mlir`,
+the CLI finishes after Sema even when MLIR is enabled in the build.
+This option cannot be combined with `-E` or a dump option. Builds without MLIR
+reject it with instructions to enable the backend.
 
 The supported subset includes global declarations, function prototypes and
 definitions, forward struct/union/enum declarations, nested blocks, expression
 statements and returns. Calls, unary/binary/conditional operators, indexing,
 member access and `sizeof` are parsed. Local declarations and initializers,
 casts and control-flow statements are still unimplemented;
-semantic analysis and code generation remain future work.
+Sema checks names, redeclarations, signatures, calls, returns, lvalues, arithmetic
+and pointer operations for the parsed subset. Code generation remains future
+work. See [the Sema/backend contract](docs/sema.md) for coverage, ownership and
+current limitations.
 
 The preprocessor supports object-like and function-like `#define` macros,
 C99 variadic macros (`...`/`__VA_ARGS__`), stringification (`#`), token pasting

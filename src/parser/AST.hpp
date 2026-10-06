@@ -21,9 +21,11 @@ struct Expr : Node {
 
 struct IntLitExpr : Expr {
   long long val;
+  std::string spelling;
 };
 struct FloatLitExpr : Expr {
   double val;
+  std::string spelling;
 };
 struct CharLitExpr : Expr {
   char val;
@@ -47,6 +49,7 @@ enum class UnaryOp {
   PRE_DEC,
   POST_INC,
   POST_DEC,
+  POS,
 };
 
 enum class BinaryOp {
@@ -90,6 +93,8 @@ struct BinaryExpr : Expr {
   BinaryOp op;
   Expr *lhs = nullptr;
   Expr *rhs = nullptr;
+  // Compound assignments calculate in this type, then store in lhs->type.
+  Type *computationType = nullptr;
 };
 
 struct UnaryExpr : Expr {
@@ -113,9 +118,24 @@ struct CastExpr : Expr {
   Expr *operand = nullptr;
 };
 
+enum class ImplicitCastKind {
+  LValueToRValue,
+  ArrayToPointer,
+  FunctionToPointer,
+  Arithmetic,
+  Pointer,
+  NullToPointer,
+  DefaultArgumentPromotion,
+};
+
+struct ImplicitCastExpr : Expr {
+  ImplicitCastKind kind;
+  Expr *operand = nullptr;
+};
+
 struct SizeofExpr : Expr {
   bool ofType = false;
-  Type *type = nullptr;
+  Type *operandType = nullptr;
   Expr *expr = nullptr;
 };
 
@@ -197,6 +217,7 @@ enum class StorageClass { NONE, AUTO, REGISTER, STATIC, EXTERN, TYPEDEF };
 struct Decl : Node {
   std::string name;
   Type *type = nullptr;
+  Decl *canonicalDecl = nullptr;
 };
 
 struct VarDecl : Decl {
@@ -210,6 +231,7 @@ struct ParamDecl : Decl {};
 struct FuncDecl : Decl {
   std::vector<ParamDecl *> params;
   CompoundStmt *body = nullptr;
+  StorageClass sc = StorageClass::NONE;
 };
 
 struct StructDecl : Decl {

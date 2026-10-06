@@ -55,6 +55,7 @@ cc1_add_module(cc1_preprocessor
 target_link_libraries(cc1_preprocessor PUBLIC cc1_lexer)
 
 cc1_add_module(cc1_parser
+  src/parser/Type.cpp
   src/parser/Parser.cpp
   src/parser/Pratt.cpp
   src/parser/ASTDump.cpp
@@ -67,7 +68,6 @@ cc1_add_module(cc1_sema
 target_link_libraries(cc1_sema PUBLIC cc1_parser)
 
 cc1_add_module(cc1_codegen
-  src/codegen/IRGen.cpp
   src/codegen/TargetInfo.cpp
 )
 target_link_libraries(cc1_codegen PUBLIC cc1_sema)
@@ -85,7 +85,31 @@ target_link_libraries(cc1
     cc1_project_options
     cc1_warnings
 )
+option(CC1_ENABLE_MLIR "Enable MLIR code generation" OFF)
 
+if(CC1_ENABLE_MLIR)
+  enable_language(C)
+  find_package(MLIR REQUIRED CONFIG)
+
+  cc1_add_module(cc1_mlir
+    src/codegen/MLIRGen.cpp
+  )
+
+  target_include_directories(cc1_mlir SYSTEM PUBLIC
+    ${LLVM_INCLUDE_DIRS}
+    ${MLIR_INCLUDE_DIRS}
+  )
+
+  target_link_libraries(cc1_mlir PUBLIC
+    cc1_sema
+    MLIRIR
+    MLIRArithDialect
+    MLIRFuncDialect
+  )
+
+  target_link_libraries(cc1 PRIVATE cc1_mlir)
+  target_compile_definitions(cc1 PRIVATE CC1_ENABLE_MLIR=1)
+endif()
 if(BUILD_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/Tests/CMakeLists.txt)
   add_subdirectory(Tests)
 endif()

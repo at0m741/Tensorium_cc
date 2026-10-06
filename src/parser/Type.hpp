@@ -48,6 +48,7 @@ struct Type {
   Type *retType = nullptr;
   std::vector<Type *> params;
   bool variadic = false;
+  bool hasPrototype = true;
 
   struct Field {
     std::string name;
@@ -111,11 +112,11 @@ struct Type {
   }
 
   bool isComplete() const {
-    if (kind == VOID)
+    if (kind == VOID || kind == FUNCTION)
       return false;
     if (kind == ARRAY)
-      return arraySize >= 0;
-    if ((kind == STRUCT || kind == UNION) && !defined)
+      return arraySize > 0 && elemType && elemType->isComplete();
+    if ((kind == STRUCT || kind == UNION || kind == ENUM) && !defined)
       return false;
     return true;
   }
@@ -128,6 +129,10 @@ struct Type {
 
 struct TypePool {
   std::vector<Type *> _all;
+
+  TypePool() = default;
+  TypePool(const TypePool &) = delete;
+  TypePool &operator=(const TypePool &) = delete;
 
   ~TypePool() {
     for (auto *t : _all)
@@ -149,5 +154,34 @@ struct TypePool {
   Type *floatTy() { return make(Type::FLOAT); }
   Type *shortTy() { return make(Type::SHORT); }
   Type *ulongTy() { return make(Type::ULONG); }
-  Type *ptrTo(Type *t) { return Type::makePointer(t); }
+  Type *ptrTo(Type *t) {
+    Type *ptr = make(Type::POINTER);
+    ptr->pointee = t;
+    return ptr;
+  }
+  Type *arrayOf(Type *elem, int size = -1) {
+    Type *array = make(Type::ARRAY);
+    array->elemType = elem;
+    array->arraySize = size;
+    return array;
+  }
+  Type *function(Type *ret, std::vector<Type *> params, bool variadic = false) {
+    Type *fn = make(Type::FUNCTION);
+    fn->retType = ret;
+    fn->params = std::move(params);
+    fn->variadic = variadic;
+    return fn;
+  }
+  Type *qualified(Type *base, Qualifiers quals) {
+    Type *copy = make(base->kind);
+    *copy = *base;
+    copy->quals = quals;
+    if (base->isArray() && base->elemType) {
+      Qualifiers elementQuals = base->elemType->quals;
+      elementQuals.isConst = elementQuals.isConst || quals.isConst;
+      elementQuals.isVolatile = elementQuals.isVolatile || quals.isVolatile;
+      copy->elemType = qualified(base->elemType, elementQuals);
+    }
+    return copy;
+  }
 };

@@ -125,3 +125,27 @@ add_test(NAME cli_dump_tokens
     -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckParserCLI.cmake
 )
 set_tests_properties(cli_dump_tokens PROPERTIES TIMEOUT 5)
+
+add_executable(cc1_sema_tests SemaTests.cpp)
+target_link_libraries(cc1_sema_tests
+  PRIVATE cc1_frontend cc1_project_options cc1_warnings
+)
+add_test(NAME sema COMMAND cc1_sema_tests)
+set_tests_properties(sema PROPERTIES TIMEOUT 10)
+
+add_test(NAME sema_cli
+  COMMAND ${CMAKE_COMMAND}
+    -DCC1=$<TARGET_FILE:cc1>
+    -DSCRATCH_DIR=${CMAKE_CURRENT_BINARY_DIR}/sema-cli
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckSemaCLI.cmake
+)
+set_tests_properties(sema_cli PROPERTIES TIMEOUT 10)
+
+add_test(NAME mlir_cli
+  COMMAND ${CMAKE_COMMAND}
+    -DCC1=$<TARGET_FILE:cc1>
+    -DMLIR_ENABLED=${CC1_ENABLE_MLIR}
+    -DSCRATCH_DIR=${CMAKE_CURRENT_BINARY_DIR}/mlir-cli
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckMLIRCLI.cmake
+)
+set_tests_properties(mlir_cli PROPERTIES TIMEOUT 10)

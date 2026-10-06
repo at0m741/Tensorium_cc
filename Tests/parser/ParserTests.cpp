@@ -129,9 +129,9 @@ bool parses_sizeof_type_expression() {
   auto *sz = dynamic_cast<SizeofExpr *>(expr);
   TEST_EXPECT(sz != nullptr);
   TEST_EXPECT(sz->ofType);
-  TEST_EXPECT(sz->type != nullptr);
-  TEST_EXPECT(sz->type->isPointer());
-  TEST_EXPECT(sz->type->pointee->kind == Type::INT);
+  TEST_EXPECT(sz->operandType != nullptr);
+  TEST_EXPECT(sz->operandType->isPointer());
+  TEST_EXPECT(sz->operandType->pointee->kind == Type::INT);
   TEST_EXPECT(ctx.helper.currentKind() == TokenKind::SEMICOLON);
   return true;
 }

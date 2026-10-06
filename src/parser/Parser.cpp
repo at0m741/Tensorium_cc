@@ -2,6 +2,7 @@
 #include "AST.hpp"
 #include "Type.hpp"
 #include <cmath>
+#include <limits>
 
 Parser::Parser(TokenSource &lexer, TypePool &types, DiagnosticEngine &diag,
                const TargetInfo &target, const LangOptions &opts)
@@ -34,8 +35,10 @@ bool Parser::match(TokenKind k) {
   return true;
 }
 
-bool Parser::isTypeName() const {
-  switch (_cur.kind) {
+bool Parser::isTypeName() const { return isTypeName(_cur); }
+
+bool Parser::isTypeName(const Token &token) const {
+  switch (token.kind) {
   case TokenKind::KW_VOID:
   case TokenKind::KW_CHAR:
   case TokenKind::KW_SHORT:
@@ -57,7 +60,7 @@ bool Parser::isTypeName() const {
   case TokenKind::KW_TYPEDEF:
     return true;
   case TokenKind::IDENT:
-    return _typedefs.count(_cur.text) > 0;
+    return _typedefs.count(token.text) > 0;
   default:
     return false;
   }
@@ -109,7 +112,11 @@ Decl *Parser::parseDecl() {
     return nullptr;
   }
 
-  base->quals = quals;
+  Qualifiers trailing = parseQualifiers();
+  quals.isConst = quals.isConst || trailing.isConst || base->quals.isConst;
+  quals.isVolatile =
+      quals.isVolatile || trailing.isVolatile || base->quals.isVolatile;
+  base = types.qualified(base, quals);
 
   if (sc == StorageClass::TYPEDEF) {
     std::string name;
@@ -156,8 +163,11 @@ Decl *Parser::parseDecl() {
     return decl;
   }
 
-  if (full->isFunction())
-    return parseFuncDecl(full, name, loc);
+  if (full->isFunction()) {
+    auto *fn = parseFuncDecl(full, name, loc);
+    fn->sc = sc;
+    return fn;
+  }
 
   VarDecl *first = parseVarDecl(full, name, loc);
   first->sc = sc;
@@ -296,7 +306,8 @@ done:
   if (hasDouble)
     return types.doubleTy();
   if (hasChar)
-    return types.make(isUnsigned ? Type::UCHAR : Type::SCHAR);
+    return types.make(isUnsigned ? Type::UCHAR
+                                 : (isSigned ? Type::SCHAR : Type::CHAR));
   if (isShort)
     return types.make(isUnsigned ? Type::USHORT : Type::SHORT);
   if (isLongLong)
@@ -343,7 +354,7 @@ void Parser::replacePlaceholder(Type *node, Type *placeholder,
 Type *Parser::parseDeclarator(Type *base, std::string &nameOut) {
   base = parsePointer(base);
 
-  if (check(TokenKind::L_PAREN) && !isTypeName() &&
+  if (check(TokenKind::L_PAREN) && !isTypeName(_peek) &&
       _peek.kind != TokenKind::R_PAREN) {
 
     advance();
@@ -364,7 +375,7 @@ Type *Parser::parseDeclarator(Type *base, std::string &nameOut) {
       return nullptr;
 
     replacePlaceholder(inner, placeholder, base);
-    return inner;
+    return inner == placeholder ? base : inner;
   }
 
   if (check(TokenKind::IDENT)) {
@@ -376,14 +387,13 @@ Type *Parser::parseDeclarator(Type *base, std::string &nameOut) {
 }
 
 Type *Parser::parseSuffix(Type *base) {
-  while (base) {
-    if (check(TokenKind::L_BRACKET)) {
-      base = parseArrayType(base);
-    } else if (check(TokenKind::L_PAREN)) {
-      base = parseFuncType(base);
-    } else {
-      break;
-    }
+  if (check(TokenKind::L_BRACKET))
+    return parseArrayType(base);
+  if (check(TokenKind::L_PAREN)) {
+    Type *fn = parseFuncType(base);
+    if (fn)
+      fn->retType = parseSuffix(fn->retType);
+    return fn;
   }
   return base;
 }
@@ -393,11 +403,17 @@ Type *Parser::parseArrayType(Type *elemType) {
   int size = -1;
   if (!check(TokenKind::R_BRACKET)) {
     Expr *e = parseExpr();
-    if (auto *lit = dynamic_cast<IntLitExpr *>(e))
-      size = (int)lit->val;
+    if (auto *lit = dynamic_cast<IntLitExpr *>(e)) {
+      if (lit->val > std::numeric_limits<int>::max())
+        error(lit->loc, "array bound is too large");
+      else
+        size = static_cast<int>(lit->val);
+    } else if (!_diag.hasErrors())
+      error(e ? e->loc : _cur.loc,
+            "only integer literal array bounds are supported");
   }
   expect(TokenKind::R_BRACKET, "expected ']'");
-  return Type::makeArray(elemType, size);
+  return types.arrayOf(parseSuffix(elemType), size);
 }
 
 Type *Parser::parseFuncType(Type *retType) {
@@ -405,6 +421,7 @@ Type *Parser::parseFuncType(Type *retType) {
   std::vector<Type *> params;
   std::vector<ParamDecl *> paramDecls;
   bool variadic = false;
+  const bool hasPrototype = !check(TokenKind::R_PAREN);
 
   if (!check(TokenKind::R_PAREN)) {
     if (check(TokenKind::KW_VOID) && _peek.kind == TokenKind::R_PAREN) {
@@ -417,13 +434,17 @@ Type *Parser::parseFuncType(Type *retType) {
           break;
         }
         SourceLoc paramLoc = _cur.loc;
+        Qualifiers pq = parseQualifiers();
         Type *ptype = parseTypeSpec();
         if (!ptype) {
           error(_cur.loc, "expected parameter type");
           return nullptr;
         }
-        Qualifiers pq = parseQualifiers();
-        ptype->quals = pq;
+        Qualifiers trailing = parseQualifiers();
+        pq.isConst = pq.isConst || trailing.isConst || ptype->quals.isConst;
+        pq.isVolatile =
+            pq.isVolatile || trailing.isVolatile || ptype->quals.isVolatile;
+        ptype = types.qualified(ptype, pq);
         std::string pname;
         ptype = parseDeclarator(ptype, pname);
         if (!ptype)
@@ -441,7 +462,8 @@ Type *Parser::parseFuncType(Type *retType) {
   expect(TokenKind::R_PAREN, "expected ')'");
   if (_diag.hasErrors())
     return nullptr;
-  Type *function = Type::makeFunction(retType, std::move(params), variadic);
+  Type *function = types.function(retType, std::move(params), variadic);
+  function->hasPrototype = hasPrototype;
   _functionParams.emplace(function, std::move(paramDecls));
   return function;
 }
@@ -457,7 +479,12 @@ FuncDecl *Parser::parseFuncDecl(Type *retType, const std::string &name,
     fn->params = params->second;
 
   if (check(TokenKind::L_BRACE)) {
+    // Parameter names hide file-scope typedef names within the function body.
+    auto savedTypedefs = _typedefs;
+    for (auto *param : fn->params)
+      _typedefs.erase(param->name);
     fn->body = parseCompoundStmt();
+    _typedefs = std::move(savedTypedefs);
   } else {
     expect(TokenKind::SEMICOLON, "expected ';' after function declaration");
   }

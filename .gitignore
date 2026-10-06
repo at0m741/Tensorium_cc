@@ -4,6 +4,7 @@ __pycache__/
 Tests/AST_AUDIT.md
 pybuild/
 build/
+/build-mlir/
 *.o
 *.so
 *.a

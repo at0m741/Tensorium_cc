@@ -21,75 +21,12 @@ const char *binaryName(BinaryOp op) {
 
 const char *unaryName(UnaryOp op) {
   static constexpr const char *names[] = {
-      "-", "!", "~", "*", "&", "pre++", "pre--", "post++", "post--",
+      "-", "!", "~", "*", "&", "pre++", "pre--", "post++", "post--", "+",
   };
   constexpr unsigned count = sizeof(names) / sizeof(names[0]);
-  static_assert(count == static_cast<unsigned>(UnaryOp::POST_DEC) + 1);
+  static_assert(count == static_cast<unsigned>(UnaryOp::POS) + 1);
   const unsigned index = static_cast<unsigned>(op);
   return index < count ? names[index] : "?";
-}
-
-std::string typeName(const Type *type) {
-  if (!type)
-    return "<null>";
-
-  std::string name;
-  static constexpr const char *builtins[] = {
-      "void", "_Bool", "char", "signed char", "unsigned char", "short",
-      "unsigned short", "int", "unsigned int", "long", "unsigned long",
-      "long long", "unsigned long long", "float", "double", "long double",
-  };
-  static_assert(sizeof(builtins) / sizeof(builtins[0]) == Type::LONGDOUBLE + 1);
-  if (type->kind <= Type::LONGDOUBLE) {
-    name = builtins[type->kind];
-  } else {
-    switch (type->kind) {
-    case Type::POINTER:
-      name = typeName(type->pointee) + "*";
-      if (type->quals.isConst)
-        name += " const";
-      if (type->quals.isVolatile)
-        name += " volatile";
-      return name;
-    case Type::ARRAY:
-      name = typeName(type->elemType) + "[";
-      if (type->arraySize >= 0)
-        name += std::to_string(type->arraySize);
-      name += "]";
-      break;
-    case Type::FUNCTION:
-      name = typeName(type->retType) + " (";
-      for (size_t i = 0; i < type->params.size(); ++i) {
-        if (i)
-          name += ", ";
-        name += typeName(type->params[i]);
-      }
-      if (type->variadic)
-        name += type->params.empty() ? "..." : ", ...";
-      name += ")";
-      break;
-    case Type::STRUCT:
-      name = "struct " + type->tag;
-      break;
-    case Type::UNION:
-      name = "union " + type->tag;
-      break;
-    case Type::ENUM:
-      name = "enum " + type->tag;
-      break;
-    case Type::TYPEDEF:
-      name = typeName(type->underlying);
-      break;
-    default:
-      name = "?";
-      break;
-    }
-  }
-  if (type->quals.isVolatile)
-    name = "volatile " + name;
-  if (type->quals.isConst)
-    name = "const " + name;
-  return name;
 }
 
 std::string escapedLiteral(const std::string &value, char quote) {
@@ -130,13 +67,21 @@ std::string escapedLiteral(const std::string &value, char quote) {
 }
 } // namespace
 
-void dumpAST(const Node *node, std::ostream &out, unsigned depth) {
+void dumpAST(const Node *node, std::ostream &out, unsigned depth, bool typed) {
   if (!node)
     return;
 
   out << std::string(depth * 2, ' ');
 
-  auto child = [&](const Node *n) { dumpAST(n, out, depth + 1); };
+  if (typed) {
+    if (auto *expr = dynamic_cast<const Expr *>(node))
+      out << "[" << (expr->type ? expr->type->str() : "<untyped>")
+          << (expr->isLval ? ", lvalue] " : ", rvalue] ");
+    else if (auto *decl = dynamic_cast<const Decl *>(node))
+      out << "[" << (decl->type ? decl->type->str() : "<untyped>") << "] ";
+  }
+
+  auto child = [&](const Node *n) { dumpAST(n, out, depth + 1, typed); };
 
   if (auto *tu = dynamic_cast<const TranslationUnit *>(node)) {
     out << "TranslationUnit\n";
@@ -163,7 +108,10 @@ void dumpAST(const Node *node, std::ostream &out, unsigned depth) {
     child(stmt->expr);
 
   } else if (auto *bin = dynamic_cast<const BinaryExpr *>(node)) {
-    out << "BinaryExpr " << binaryName(bin->op) << '\n';
+    out << "BinaryExpr " << binaryName(bin->op);
+    if (typed && bin->computationType)
+      out << " compute=" << bin->computationType->str();
+    out << '\n';
     child(bin->lhs);
     child(bin->rhs);
 
@@ -189,19 +137,32 @@ void dumpAST(const Node *node, std::ostream &out, unsigned depth) {
     child(index->index);
 
   } else if (auto *member = dynamic_cast<const MemberExpr *>(node)) {
-    out << "MemberExpr " << (member->arrow ? "->" : ".") << member->member << '\n';
+    out << "MemberExpr " << (member->arrow ? "->" : ".") << member->member
+        << '\n';
     child(member->base);
 
   } else if (auto *size = dynamic_cast<const SizeofExpr *>(node)) {
     if (size->ofType)
-      out << "SizeofExpr type " << typeName(size->type) << '\n';
+      out << "SizeofExpr type " << size->operandType->str() << '\n';
     else {
       out << "SizeofExpr expr\n";
       child(size->expr);
     }
 
+  } else if (auto *cast = dynamic_cast<const ImplicitCastExpr *>(node)) {
+    static constexpr const char *names[] = {"lvalue-to-rvalue",
+                                            "array-to-pointer",
+                                            "function-to-pointer",
+                                            "arithmetic",
+                                            "pointer",
+                                            "null-to-pointer",
+                                            "default-argument-promotion"};
+    out << "ImplicitCastExpr " << names[static_cast<unsigned>(cast->kind)]
+        << '\n';
+    child(cast->operand);
+
   } else if (auto *cast = dynamic_cast<const CastExpr *>(node)) {
-    out << "CastExpr " << typeName(cast->toType) << '\n';
+    out << "CastExpr " << cast->toType->str() << '\n';
     child(cast->operand);
 
   } else if (auto *lit = dynamic_cast<const IntLitExpr *>(node)) {
@@ -211,7 +172,8 @@ void dumpAST(const Node *node, std::ostream &out, unsigned depth) {
     out << "FloatLitExpr " << lit->val << '\n';
 
   } else if (auto *lit = dynamic_cast<const CharLitExpr *>(node)) {
-    out << "CharLitExpr " << escapedLiteral(std::string(1, lit->val), '\'') << '\n';
+    out << "CharLitExpr " << escapedLiteral(std::string(1, lit->val), '\'')
+        << '\n';
 
   } else if (auto *lit = dynamic_cast<const StringLitExpr *>(node)) {
     out << "StringLitExpr " << escapedLiteral(lit->val, '"') << '\n';
@@ -227,7 +189,8 @@ void dumpAST(const Node *node, std::ostream &out, unsigned depth) {
     out << "TypedefDecl " << td->name << '\n';
 
   } else if (auto *param = dynamic_cast<const ParamDecl *>(node)) {
-    out << "ParamDecl " << (param->name.empty() ? "<unnamed>" : param->name) << '\n';
+    out << "ParamDecl " << (param->name.empty() ? "<unnamed>" : param->name)
+        << '\n';
 
   } else if (auto *tag = dynamic_cast<const StructDecl *>(node)) {
     out << "StructDecl " << tag->name << '\n';

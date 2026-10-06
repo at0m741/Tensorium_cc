@@ -81,7 +81,14 @@ Expr *Parser::parseUnary() {
   }
   case TokenKind::PLUS: {
     advance();
-    return parseUnary();
+    Expr *operand = parseUnary();
+    if (!operand)
+      return nullptr;
+    auto *node = new UnaryExpr();
+    node->loc = tok.loc;
+    node->op = UnaryOp::POS;
+    node->operand = operand;
+    return node;
   }
   case TokenKind::MINUS: {
     advance();
@@ -144,18 +151,22 @@ Expr *Parser::parseUnary() {
     sz->loc = tok.loc;
     if (match(TokenKind::L_PAREN)) {
       if (isTypeName()) {
+        Qualifiers q = parseQualifiers();
         Type *ty = parseTypeSpec();
         if (!ty) {
           error(_cur.loc, "expected type name after sizeof(");
         } else {
-          Qualifiers q = parseQualifiers();
-          ty->quals = q;
+          Qualifiers trailing = parseQualifiers();
+          q.isConst = q.isConst || trailing.isConst || ty->quals.isConst;
+          q.isVolatile =
+              q.isVolatile || trailing.isVolatile || ty->quals.isVolatile;
+          ty = types.qualified(ty, q);
           std::string dummy;
           ty = parseDeclarator(ty, dummy);
           if (!ty)
             return nullptr;
           sz->ofType = true;
-          sz->type = ty;
+          sz->operandType = ty;
         }
       } else {
         sz->expr = parseExpr();
@@ -182,6 +193,7 @@ Expr *Parser::parsePrimary() {
     auto *lit = new IntLitExpr();
     lit->loc = tok.loc;
     lit->val = tok.int_val;
+    lit->spelling = tok.text;
     advance();
     return lit;
   }
@@ -189,6 +201,7 @@ Expr *Parser::parsePrimary() {
     auto *lit = new FloatLitExpr();
     lit->loc = tok.loc;
     lit->val = tok.float_val;
+    lit->spelling = tok.text;
     advance();
     return lit;
   }
@@ -241,7 +254,8 @@ Expr *Parser::parsePostfix(Expr *base) {
       if (!check(TokenKind::R_PAREN)) {
         do {
           // Separating commas have lower precedence than assignments.
-          // Grouping and conditional middle operands still admit comma operators.
+          // Grouping and conditional middle operands still admit comma
+          // operators.
           Expr *arg = parseExpr(infixPrec(TokenKind::ASSIGN));
           if (!arg)
             return nullptr;
