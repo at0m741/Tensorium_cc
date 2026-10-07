@@ -2,12 +2,14 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/SCF/IR/SCFDialect.h"
 #include "mlir/IR/Verifier.h"
 
 MLIRGen::MLIRGen(mlir::MLIRContext &context, DiagnosticEngine &diagnostics,
                  const TargetInfo &targetInfo)
     : builder(&context), diag(diagnostics), target(targetInfo) {
-  context.loadDialect<mlir::arith::ArithDialect, mlir::func::FuncDialect>();
+  context.loadDialect<mlir::arith::ArithDialect, mlir::func::FuncDialect,
+                      mlir::scf::SCFDialect>();
 }
 
 mlir::OwningOpRef<mlir::ModuleOp>
@@ -103,6 +105,7 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
   diag.error(expr.loc, "MLIR generation does not support this expression yet");
   return {};
 }
+
 mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
   if (!function.body || !function.type->params.empty() ||
       function.type->variadic || function.type->retType->kind != Type::INT ||
@@ -131,7 +134,7 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
   auto signature = builder.getFunctionType({}, {resultType});
 
   auto mlirFunction =
-      builder.create<mlir::func::FuncOp>(location, function.name, signature);
+      mlir::func::FuncOp::create(builder, location, function.name, signature);
 
   if (function.sc == StorageClass::STATIC)
     mlirFunction.setPrivate();
@@ -152,7 +155,7 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
     return mlir::failure();
   }
 
-  builder.create<mlir::func::ReturnOp>(location, mlir::ValueRange{value});
+  mlir::func::ReturnOp::create(builder, location, mlir::ValueRange{value});
 
   return mlir::success();
 }
