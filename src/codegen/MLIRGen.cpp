@@ -4,12 +4,14 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCFDialect.h"
 #include "mlir/IR/Verifier.h"
+#include "llvm/ADT/DenseMap.h"
+#include <llvm/ADT/SmallVector.h>
+#include <mlir/Support/LLVM.h>
 
 MLIRGen::MLIRGen(mlir::MLIRContext &context, DiagnosticEngine &diagnostics,
                  const TargetInfo &targetInfo)
     : builder(&context), diag(diagnostics), target(targetInfo) {
-  context.loadDialect<mlir::arith::ArithDialect, mlir::func::FuncDialect,
-                      mlir::scf::SCFDialect>();
+  context.loadDialect<mlir::arith::ArithDialect, mlir::func::FuncDialect>();
 }
 
 mlir::OwningOpRef<mlir::ModuleOp>
@@ -101,14 +103,13 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
           .getResult();
     }
   }
-
   diag.error(expr.loc, "MLIR generation does not support this expression yet");
   return {};
 }
 
 mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
-  if (!function.body || !function.type->params.empty() ||
-      function.type->variadic || function.type->retType->kind != Type::INT ||
+  if (!function.body || function.type->variadic ||
+      function.type->retType->kind != Type::INT ||
       function.body->items.size() != 1) {
     diag.error(function.loc, "MLIR generation is not implemented "
                              "for this declaration yet");
@@ -131,8 +132,17 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
   mlir::OpBuilder::InsertionGuard guard(builder);
 
   auto location = builder.getUnknownLoc();
-  auto signature = builder.getFunctionType({}, {resultType});
+  llvm::SmallVector<mlir::Type> paramTypes;
 
+  for (const auto &param : function.type->params) {
+    mlir::Type type = lowerType(*param, function.loc);
+    if (!type)
+      return mlir::failure();
+
+    paramTypes.push_back(type);
+  }
+
+  auto signature = builder.getFunctionType(paramTypes, {resultType});
   auto mlirFunction =
       mlir::func::FuncOp::create(builder, location, function.name, signature);
 
@@ -141,6 +151,16 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
 
   mlir::Block *entry = mlirFunction.addEntryBlock();
   builder.setInsertionPointToStart(entry);
+
+  values.clear();
+  if (function.params.size() != entry->getNumArguments()) {
+    diag.error(function.loc, "MLIR parameter count mismatch");
+    mlirFunction.erase();
+    return mlir::failure();
+  }
+
+  for (unsigned i = 0; i < function.params.size(); i++)
+    values[function.params[i]] = entry->getArgument(i);
 
   mlir::Value value = emitExpr(*returnStmt->value);
   if (!value) {

@@ -10,6 +10,9 @@
 #include "mlir/IR/OwningOpRef.h"
 #include "parser/Type.hpp"
 
+#include "llvm/ADT/DenseMap.h"
+#include <mlir/IR/Value.h>
+
 class MLIRGen {
 public:
   MLIRGen(mlir::MLIRContext &context, DiagnosticEngine &diag,
@@ -22,6 +25,7 @@ private:
   DiagnosticEngine &diag;
   const TargetInfo &target;
 
+  llvm::DenseMap<const Decl *, mlir::Value> values;
   mlir::Type lowerType(const ::Type &type, SourceLoc loc);
   mlir::LogicalResult emitFunction(const FuncDecl &function);
   mlir::Value emitExpr(const Expr &expr);
