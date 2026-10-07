@@ -3,6 +3,7 @@ file(MAKE_DIRECTORY "${SCRATCH_DIR}")
 file(WRITE "${SCRATCH_DIR}/empty.c" "/* Empty translation unit. */\n")
 file(WRITE "${SCRATCH_DIR}/valid.c" "int add(int a, int b) { return a + b; }\n")
 file(WRITE "${SCRATCH_DIR}/invalid.c" "int f(void) { return missing; }\n")
+file(WRITE "${SCRATCH_DIR}/locals.c" "int add(int a, int b) { return a + b; }\nint main(void) { int a = 1; int b = 4; add(a, b); }\n")
 
 function(run_case expected_status)
   execute_process(
@@ -19,7 +20,7 @@ function(run_case expected_status)
 endfunction()
 
 # Enabling the backend at build time must not enable emission for ordinary inputs.
-foreach(SOURCE IN ITEMS empty.c valid.c)
+foreach(SOURCE IN ITEMS empty.c valid.c locals.c)
   run_case(0 "${SOURCE}")
   if(NOT "${OUTPUT}" STREQUAL "" OR NOT "${DIAGNOSTIC}" STREQUAL "")
     message(FATAL_ERROR "Default invocation ran MLIR generation:\n${OUTPUT}\n${DIAGNOSTIC}")
@@ -33,9 +34,20 @@ if(MLIR_ENABLED)
     message(FATAL_ERROR "Incorrect empty MLIR module:\n${OUTPUT}\n${DIAGNOSTIC}")
   endif()
 
-  run_case(1 --emit-mlir valid.c)
-  if(NOT "${OUTPUT}" STREQUAL "" OR NOT "${DIAGNOSTIC}" MATCHES "MLIR generation is not implemented for this declaration yet")
-    message(FATAL_ERROR "Incorrect unsupported-declaration diagnostic:\n${OUTPUT}\n${DIAGNOSTIC}")
+  run_case(0 --emit-mlir valid.c)
+  if(NOT "${OUTPUT}" MATCHES "func.func @add" OR NOT "${OUTPUT}" MATCHES "arith.addi" OR NOT "${OUTPUT}" MATCHES "(func\\.)?return" OR NOT "${DIAGNOSTIC}" STREQUAL "")
+    message(FATAL_ERROR "Incorrect function MLIR:\n${OUTPUT}\n${DIAGNOSTIC}")
+  endif()
+
+  run_case(0 --emit-mlir locals.c)
+  if(NOT "${OUTPUT}" MATCHES "memref.alloca" OR NOT "${OUTPUT}" MATCHES "memref.store" OR NOT "${OUTPUT}" MATCHES "memref.load" OR NOT "${OUTPUT}" MATCHES "(func\\.)?call @add" OR NOT "${DIAGNOSTIC}" STREQUAL "")
+    message(FATAL_ERROR "Incorrect local storage or call MLIR:\n${OUTPUT}\n${DIAGNOSTIC}")
+  endif()
+
+  file(WRITE "${SCRATCH_DIR}/unsupported.c" "int f(int x) { return x / 2; }\n")
+  run_case(1 --emit-mlir unsupported.c)
+  if(NOT "${OUTPUT}" STREQUAL "" OR NOT "${DIAGNOSTIC}" MATCHES "MLIR generation does not support this binary operator yet")
+    message(FATAL_ERROR "Incorrect unsupported-operator diagnostic:\n${OUTPUT}\n${DIAGNOSTIC}")
   endif()
 
   run_case(1 --emit-mlir invalid.c)

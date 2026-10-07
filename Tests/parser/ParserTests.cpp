@@ -550,6 +550,37 @@ bool dumps_parsed_expression_nodes() {
   return complete;
 }
 
+bool parses_local_declarations_and_typedef_scopes() {
+  ParserTestContext ctx(
+      "typedef int T; int f(void) { int x = 1 + 2; { typedef short T; T y = 3; "
+      "} int T = 4; return sizeof(T); } T global;");
+  auto *tu = ctx.parser.parse();
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  auto *fn = findFunction(tu, "f");
+  TEST_EXPECT(fn && fn->body->items.size() == 4);
+  auto *x = dynamic_cast<VarDecl *>(fn->body->items[0]);
+  TEST_EXPECT(x && !x->isGlobal && x->name == "x");
+  TEST_EXPECT(dynamic_cast<BinaryExpr *>(x->init));
+  auto *nested = dynamic_cast<CompoundStmt *>(fn->body->items[1]);
+  TEST_EXPECT(nested && nested->items.size() == 2);
+  auto *y = dynamic_cast<VarDecl *>(nested->items[1]);
+  TEST_EXPECT(y && y->type->kind == Type::SHORT && !y->isGlobal);
+  auto *ret = dynamic_cast<ReturnStmt *>(fn->body->items[3]);
+  auto *size = ret ? dynamic_cast<SizeofExpr *>(ret->value) : nullptr;
+  TEST_EXPECT(size && !size->ofType && dynamic_cast<IdentExpr *>(size->expr));
+  auto *global = dynamic_cast<VarDecl *>(tu->decls.back());
+  TEST_EXPECT(global && global->isGlobal && global->type->kind == Type::INT);
+  return true;
+}
+
+bool diagnoses_invalid_local_initializers() {
+  ParserTestContext ctx("int f(void) { int x = ; return 0; }");
+  ctx.parser.parse();
+  TEST_EXPECT(ctx.diag.errorCount() == 1);
+  TEST_EXPECT(ctx.diag.diagnostics().front().message == "expected expression");
+  return true;
+}
+
 int main() {
   struct TestEntry {
     const char *name;
@@ -558,6 +589,8 @@ int main() {
 
   const std::vector<TestEntry> tests = {
       {"parses_simple_int_decl", parses_simple_int_decl},
+      {"parses_local_declarations_and_typedef_scopes", parses_local_declarations_and_typedef_scopes},
+      {"diagnoses_invalid_local_initializers", diagnoses_invalid_local_initializers},
       {"parses_unsigned_long_pointer", parses_unsigned_long_pointer},
       {"parses_function_pointer_declarator", parses_function_pointer_declarator},
       {"parses_array_with_constant_size", parses_array_with_constant_size},

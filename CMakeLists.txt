@@ -105,6 +105,7 @@ if(CC1_ENABLE_MLIR)
     MLIRIR
     MLIRArithDialect
     MLIRFuncDialect
+    MLIRMemRefDialect
   )
 
   target_link_libraries(cc1 PRIVATE cc1_mlir)

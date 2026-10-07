@@ -44,11 +44,11 @@ private:
   void error(const SourceLoc &loc, const std::string &msg);
   void syncToNextDecl();
 
-  Decl *parseDecl();
+  Decl *parseDecl(bool global = true);
   FuncDecl *parseFuncDecl(Type *retType, const std::string &name,
                           SourceLoc &loc);
-  VarDecl *parseVarDecl(Type *baseType, const std::string &name,
-                        SourceLoc &loc);
+  VarDecl *parseVarDecl(Type *baseType, const std::string &name, SourceLoc &loc,
+                        bool global);
 
   Type *parseSuffix(Type *base);
   void replacePlaceholder(Type *node, Type *placeholder, Type *replacement);

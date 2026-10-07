@@ -149,3 +149,12 @@ add_test(NAME mlir_cli
     -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckMLIRCLI.cmake
 )
 set_tests_properties(mlir_cli PROPERTIES TIMEOUT 10)
+
+if(CC1_ENABLE_MLIR)
+  add_executable(cc1_mlir_tests MLIRGenTests.cpp)
+  target_link_libraries(cc1_mlir_tests
+    PRIVATE cc1_mlir cc1_frontend cc1_project_options cc1_warnings
+  )
+  add_test(NAME mlir_codegen COMMAND cc1_mlir_tests)
+  set_tests_properties(mlir_codegen PROPERTIES TIMEOUT 10)
+endif()

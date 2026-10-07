@@ -82,6 +82,9 @@ void accepts_supported_programs() {
       "factory(x)(x); }",
       "int f(int x) { return +x; }",
       "int (*p)(int); int f(void) { return (*p)(1); }",
+      "int f(int x) { int y = x + 1; { int x = 2; y = x; } return y; }",
+      "typedef int T; int f(void) { { typedef short T; T x = 1; } T x = 2; "
+      "return x; }",
       "typedef int T; int f(int *T) { return sizeof(T); } T value;",
   };
   for (auto *source : cases) {
@@ -98,6 +101,12 @@ void rejects_semantic_errors() {
   };
   const Case cases[] = {
       {"int f(void) { return missing; }", "undeclared identifier"},
+      {"int f(void) { int x = missing; return x; }", "undeclared identifier"},
+      {"int f(int x) { int x = 1; return x; }", "conflicting declaration"},
+      {"int f(void) { { int x = 1; } return x; }", "undeclared identifier"},
+      {"int f(void) { int *p = 1; return 0; }", "incompatible initializer"},
+      {"int f(void) { const int x = 1; x = 2; return x; }",
+       "modifiable lvalue"},
       {"int f(void) { return later(); } int later(void);",
        "undeclared identifier"},
       {"int f(int x) { return x; } int g(void) { return x; }",

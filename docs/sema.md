@@ -73,13 +73,16 @@ as raw pointers; a shared AST arena is a separate ownership improvement.
 
 No LLVM/MLIR dependency, IR generator, ABI lowering or target layout computation
 is added by this stage. The first backend can consume checked scalar function
-signatures, parameters, expressions, calls and returns. Globals, addresses and
-mutable parameters additionally need a storage model rather than only SSA values.
+signatures, parameters, expressions, calls and returns. The current backend uses
+scalar `memref` storage for automatic locals and modified parameters; globals and
+address-taking still need additional storage and pointer support.
 
 ## Boundaries of this first stage
 
-Local declaration syntax and initializers, explicit cast syntax, control-flow
-statement syntax, record/enum definitions and full constant-expression evaluation
+Automatic local declarations and scalar initializers are parsed and checked,
+including declaration visibility, nested scopes, typedef shadowing and initializer
+conversions. Global initializers, multiple declarators, explicit cast syntax,
+control-flow statement syntax, record/enum definitions and full constant-expression evaluation
 remain unsupported by the parser. Sema rejects unsupported statements rather
 than silently sending them to a backend. Member access is diagnosed on incomplete
 records; useful member access awaits record definitions and layout support.

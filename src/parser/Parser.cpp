@@ -100,7 +100,7 @@ TranslationUnit *Parser::parse() {
   return tu;
 }
 
-Decl *Parser::parseDecl() {
+Decl *Parser::parseDecl(bool global) {
   SourceLoc loc = _cur.loc;
 
   StorageClass sc = parseStorageClass();
@@ -164,12 +164,19 @@ Decl *Parser::parseDecl() {
   }
 
   if (full->isFunction()) {
+    if (!global && check(TokenKind::L_BRACE)) {
+      error(loc, "nested function definitions are not supported");
+      return nullptr;
+    }
     auto *fn = parseFuncDecl(full, name, loc);
     fn->sc = sc;
     return fn;
   }
 
-  VarDecl *first = parseVarDecl(full, name, loc);
+  // A local object's name hides a typedef from its declarator onward.
+  if (!global)
+    _typedefs.erase(name);
+  VarDecl *first = parseVarDecl(full, name, loc, global);
   first->sc = sc;
 
   expect(TokenKind::SEMICOLON, "expected ';' after declaration");
@@ -493,18 +500,21 @@ FuncDecl *Parser::parseFuncDecl(Type *retType, const std::string &name,
 }
 
 VarDecl *Parser::parseVarDecl(Type *baseType, const std::string &name,
-                              SourceLoc &loc) {
+                              SourceLoc &loc, bool global) {
   VarDecl *var = new VarDecl();
   var->loc = loc;
   var->name = name;
   var->type = baseType;
-  var->isGlobal = true;
+  var->isGlobal = global;
 
   if (match(TokenKind::ASSIGN)) {
-    error(_cur.loc, "initializers are not implemented yet");
-    while (!_cur.isEof() && !check(TokenKind::COMMA) &&
-           !check(TokenKind::SEMICOLON)) {
-      advance();
+    if (global) {
+      error(_cur.loc, "global initializers are not implemented yet");
+      while (!_cur.isEof() && !check(TokenKind::COMMA) &&
+             !check(TokenKind::SEMICOLON))
+        advance();
+    } else {
+      var->init = parseExpr(infixPrec(TokenKind::ASSIGN));
     }
   }
 
@@ -607,17 +617,21 @@ Stmt *Parser::parseStmt() {
 CompoundStmt *Parser::parseCompoundStmt() {
   auto *block = new CompoundStmt();
   block->loc = expect(TokenKind::L_BRACE, "expected '{'").loc;
+  auto savedTypedefs = _typedefs;
 
   while (!check(TokenKind::R_BRACE) && !_cur.isEof() && !_diag.hasErrors()) {
-    Stmt *stmt = parseStmt();
-    if (stmt)
-      block->items.push_back(stmt);
+    Node *item = isTypeName() ? static_cast<Node *>(parseDecl(false))
+                              : static_cast<Node *>(parseStmt());
+    if (item)
+      block->items.push_back(item);
     else
       break;
   }
 
   if (!_diag.hasErrors())
     expect(TokenKind::R_BRACE, "expected '}' at end of block");
+
+  _typedefs = std::move(savedTypedefs);
 
   return block;
 }

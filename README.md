@@ -36,8 +36,19 @@ diagnostics and status 1 without an AST. The default invocation also runs Sema.
 Optional MLIR emission is enabled at build time with `-DCC1_ENABLE_MLIR=ON`
 and an LLVM/MLIR CMake package (`MLIR_DIR` and, if needed, `LLVM_DIR`).
 Run `cc1 --emit-mlir input.c` to request emission after successful Sema.
-The current generator emits and verifies empty modules; declarations still
-produce an explicit unsupported-codegen diagnostic. Without `--emit-mlir`,
+The current generator emits and verifies empty modules, function prototypes and
+definitions returning `int` or `void`. Scalar parameters are mapped to block
+arguments using their AST declarations. Automatic scalar locals use `memref`
+storage with initializer stores and loads; simple assignment to locals and
+parameters is supported. Numeric integer literals, integer `+`, `-`, `*`,
+Sema's integer conversions, nested blocks, expression statements and direct
+function calls are supported. Compatible function redeclarations share one
+symbol, including prototypes followed by definitions. Falling off the end of
+`main` returns zero; void functions receive an implicit empty return. Other
+non-void functions currently require an explicit return.
+Globals, static/extern local storage, volatile objects, indirect or variadic
+calls, control flow, floating-point literals/arithmetic/conversions and other
+operators still produce explicit unsupported-codegen diagnostics. Without `--emit-mlir`,
 the CLI finishes after Sema even when MLIR is enabled in the build.
 This option cannot be combined with `-E` or a dump option. Builds without MLIR
 reject it with instructions to enable the backend.
@@ -45,8 +56,9 @@ reject it with instructions to enable the backend.
 The supported subset includes global declarations, function prototypes and
 definitions, forward struct/union/enum declarations, nested blocks, expression
 statements and returns. Calls, unary/binary/conditional operators, indexing,
-member access and `sizeof` are parsed. Local declarations and initializers,
-casts and control-flow statements are still unimplemented;
+member access and `sizeof` are parsed. Blocks support local declarations and
+scalar initializers, with one declarator per declaration and scoped typedef
+lookup. Global initializers, casts and control-flow statements remain unimplemented;
 Sema checks names, redeclarations, signatures, calls, returns, lvalues, arithmetic
 and pointer operations for the parsed subset. Code generation remains future
 work. See [the Sema/backend contract](docs/sema.md) for coverage, ownership and
