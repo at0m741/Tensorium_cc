@@ -86,9 +86,16 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
       if (!type)
         return {};
 
-      return builder
-          .create<mlir::arith::ConstantIntOp>(builder.getUnknownLoc(),
-                                              literal->val, type)
+      auto intType = mlir::dyn_cast<mlir::IntegerType>(type);
+      if (!intType) {
+        diag.error(literal->loc,
+                   "integer literal lowered to a non-integer MLIR type");
+        return {};
+      }
+
+      return mlir::arith::ConstantIntOp::create(
+                 builder, builder.getUnknownLoc(),
+                 static_cast<int64_t>(literal->val), intType.getWidth())
           .getResult();
     }
   }
@@ -96,7 +103,6 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
   diag.error(expr.loc, "MLIR generation does not support this expression yet");
   return {};
 }
-
 mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
   if (!function.body || !function.type->params.empty() ||
       function.type->variadic || function.type->retType->kind != Type::INT ||
