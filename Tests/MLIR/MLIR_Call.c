@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 int add(int a, int b) {
 	return a + b;
 }
@@ -15,6 +17,6 @@ int main() {
 	int b = 4;
 
 	add(a, b);
-
+	printf("hello");
 	return 0;
 }

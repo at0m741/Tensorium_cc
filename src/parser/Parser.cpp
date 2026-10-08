@@ -1,6 +1,7 @@
 #include "Parser.hpp"
 #include "AST.hpp"
 #include "Type.hpp"
+#include "lexer/Token.hpp"
 #include <cmath>
 #include <limits>
 
@@ -595,6 +596,8 @@ ReturnStmt *Parser::parseReturnStmt() {
 }
 
 Stmt *Parser::parseStmt() {
+  if (check(TokenKind::KW_IF))
+    return parseIfStmt();
   if (check(TokenKind::L_BRACE))
     return parseCompoundStmt();
 
@@ -634,4 +637,33 @@ CompoundStmt *Parser::parseCompoundStmt() {
   _typedefs = std::move(savedTypedefs);
 
   return block;
+}
+
+IfStmt *Parser::parseIfStmt() {
+  auto *stmt = new IfStmt();
+  stmt->loc = expect(TokenKind::KW_IF, "expected 'if'").loc;
+
+  expect(TokenKind::L_PAREN, "expected '(' after if keyword");
+  if (_diag.hasErrors())
+    return nullptr;
+
+  stmt->cond = parseExpr();
+  if (!stmt->cond || _diag.hasErrors())
+    return nullptr;
+
+  expect(TokenKind::R_PAREN, "expected ')' after if condition");
+  if (_diag.hasErrors())
+    return nullptr;
+
+  stmt->then = parseStmt();
+  if (!stmt->then || _diag.hasErrors())
+    return nullptr;
+
+  if (match(TokenKind::KW_ELSE)) {
+    stmt->els = parseStmt();
+    if (!stmt->els || _diag.hasErrors())
+      return nullptr;
+  }
+
+  return stmt;
 }

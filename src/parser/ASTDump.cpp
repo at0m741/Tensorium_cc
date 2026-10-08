@@ -103,6 +103,12 @@ void dumpAST(const Node *node, std::ostream &out, unsigned depth, bool typed) {
     out << "ReturnStmt\n";
     child(ret->value);
 
+  } else if (auto *stmt = dynamic_cast<const IfStmt *>(node)) {
+    out << "IfStmt\n";
+    child(stmt->cond);
+    child(stmt->then);
+    child(stmt->els);
+
   } else if (auto *stmt = dynamic_cast<const ExprStmt *>(node)) {
     out << "ExprStmt\n";
     child(stmt->expr);

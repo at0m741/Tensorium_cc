@@ -37,4 +37,6 @@ private:
   mlir::LogicalResult emitCall(const CallExpr &call,
                                mlir::Value *result = nullptr);
   mlir::Value emitExpr(const Expr &expr);
+  mlir::LogicalResult emitIf(const IfStmt &stmt, mlir::func::FuncOp function);
+  mlir::Value emitCondition(const Expr &expr);
 };

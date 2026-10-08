@@ -1,4 +1,5 @@
 #include "Sema.hpp"
+#include "parser/AST.hpp"
 #include <algorithm>
 #include <cctype>
 #include <limits>
@@ -464,6 +465,20 @@ void Sema::analyzeNode(Node *node) {
       }
     } else if (!ret->isVoid())
       fail(s->loc, "non-void function must return a value");
+  } else if (auto *stmt = dynamic_cast<IfStmt *>(node)) {
+    Type *condition = analyzeExpr(stmt->cond);
+
+    if (condition) {
+      condition = value(stmt->cond);
+
+      if (!condition->isScalar())
+        fail(stmt->cond->loc, "if requieres a scalar operand");
+    }
+
+    if (stmt->then)
+      analyzeNode(stmt->then);
+    if (stmt->els)
+      analyzeNode(stmt->els);
   } else if (auto *d = dynamic_cast<Decl *>(node)) {
     if (declare(d, false))
       if (auto *v = dynamic_cast<VarDecl *>(d))
