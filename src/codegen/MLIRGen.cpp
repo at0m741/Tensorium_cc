@@ -50,8 +50,6 @@ MLIRGen::generate(const TranslationUnit &unit) {
       selected[key] = function;
     }
   }
-  // Declare symbols first, so prototypes, recursion and later definitions share
-  // the canonical declaration established by Sema.
   for (const Decl *key : order) {
     builder.setInsertionPointToEnd(module->getBody());
     if (mlir::failed(declareFunction(*selected[key])))
@@ -262,7 +260,6 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
         return {};
       }
 
-      // Sema a déjà converti les opérandes vers leur type commun.
       const bool isSigned = binary->lhs->type->isSigned();
       using Predicate = mlir::arith::CmpIPredicate;
       Predicate predicate = Predicate::eq;
@@ -336,7 +333,7 @@ mlir::LogicalResult MLIRGen::declareFunction(const FuncDecl &function) {
   auto signature = builder.getFunctionType(params, results);
   auto op = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(),
                                                function.name, signature);
-  op.setPrivate(); // External declarations must have private MLIR visibility.
+  op.setPrivate(); 
   const Decl *key = function.canonicalDecl ? function.canonicalDecl : &function;
   functions[key] = op;
   return mlir::success();
