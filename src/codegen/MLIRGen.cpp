@@ -15,9 +15,9 @@
 MLIRGen::MLIRGen(mlir::MLIRContext &context, DiagnosticEngine &diagnostics,
                  const TargetInfo &targetInfo)
     : builder(&context), diag(diagnostics), target(targetInfo) {
-  context.loadDialect<mlir::arith::ArithDialect, mlir::func::FuncDialect,
-                      mlir::memref::MemRefDialect,
-                      mlir::cf::ControlFlowDialect>();
+  context
+      .loadDialect<mlir::arith::ArithDialect, mlir::func::FuncDialect,
+                   mlir::memref::MemRefDialect, mlir::cf::ControlFlowDialect>();
 }
 
 mlir::OwningOpRef<mlir::ModuleOp>
@@ -237,43 +237,72 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
                                             address, mlir::ValueRange{});
       return value;
     }
-    if (binary->op != BinaryOp::ADD && binary->op != BinaryOp::SUB &&
-        binary->op != BinaryOp::MUL) {
-      diag.error(binary->loc,
-                 "MLIR generation does not support this binary operator yet");
-      return {};
-    }
-    if (!binary->type || !binary->type->isIntegral() || !binary->lhs ||
-        !binary->rhs) {
-      diag.error(binary->loc,
-                 "MLIR binary arithmetic currently requires integer operands");
-      return {};
-    }
-    mlir::Value lhs = emitExpr(*binary->lhs);
-    if (!lhs)
-      return {};
-    mlir::Value rhs = emitExpr(*binary->rhs);
-    if (!rhs)
-      return {};
-    mlir::Type resultType = lowerType(*binary->type, binary->loc);
-    if (!resultType || !mlir::isa<mlir::IntegerType>(lhs.getType()) ||
-        lhs.getType() != rhs.getType() || lhs.getType() != resultType) {
-      diag.error(binary->loc, "MLIR binary operand types do not match the AST");
-      return {};
-    }
-    auto loc = builder.getUnknownLoc();
-    switch (binary->op) {
-    case BinaryOp::ADD:
-      return builder.create<mlir::arith::AddIOp>(loc, lhs, rhs).getResult();
-    case BinaryOp::SUB:
-      return builder.create<mlir::arith::SubIOp>(loc, lhs, rhs).getResult();
-    case BinaryOp::MUL:
-      return builder.create<mlir::arith::MulIOp>(loc, lhs, rhs).getResult();
-    default:
-      break;
+    if (binary->op >= BinaryOp::EQ && binary->op <= BinaryOp::GEQ) {
+      if (!binary->lhs || !binary->rhs || !binary->lhs->type ||
+          !binary->rhs->type || !binary->lhs->type->isIntegral() ||
+          !binary->rhs->type->isIntegral() || !binary->type ||
+          binary->type->kind != Type::INT) {
+        diag.error(binary->loc,
+                   "MLIR comparisons currently require integer operands");
+        return {};
+      }
+
+      mlir::Value lhs = emitExpr(*binary->lhs);
+      if (!lhs)
+        return {};
+
+      mlir::Value rhs = emitExpr(*binary->rhs);
+      if (!rhs)
+        return {};
+
+      if (!mlir::isa<mlir::IntegerType>(lhs.getType()) ||
+          lhs.getType() != rhs.getType()) {
+        diag.error(binary->loc,
+                   "MLIR comparison operand types do not match the AST");
+        return {};
+      }
+
+      // Sema a déjà converti les opérandes vers leur type commun.
+      const bool isSigned = binary->lhs->type->isSigned();
+      using Predicate = mlir::arith::CmpIPredicate;
+      Predicate predicate = Predicate::eq;
+
+      switch (binary->op) {
+      case BinaryOp::EQ:
+        predicate = Predicate::eq;
+        break;
+      case BinaryOp::NEQ:
+        predicate = Predicate::ne;
+        break;
+      case BinaryOp::LT:
+        predicate = isSigned ? Predicate::slt : Predicate::ult;
+        break;
+      case BinaryOp::GT:
+        predicate = isSigned ? Predicate::sgt : Predicate::ugt;
+        break;
+      case BinaryOp::LEQ:
+        predicate = isSigned ? Predicate::sle : Predicate::ule;
+        break;
+      case BinaryOp::GEQ:
+        predicate = isSigned ? Predicate::sge : Predicate::uge;
+        break;
+      default:
+        break;
+      }
+
+      mlir::Type resultType = lowerType(*binary->type, binary->loc);
+      if (!resultType)
+        return {};
+
+      auto loc = builder.getUnknownLoc();
+      mlir::Value comparison =
+          builder.create<mlir::arith::CmpIOp>(loc, predicate, lhs, rhs)
+              .getResult();
+
+      return builder.create<mlir::arith::ExtUIOp>(loc, resultType, comparison)
+          .getResult();
     }
   }
-
   diag.error(expr.loc, "MLIR generation does not support this expression yet");
   return {};
 }

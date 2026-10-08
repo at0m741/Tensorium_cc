@@ -865,7 +865,7 @@ Type *Sema::analyzeExpr(Expr *&expr) {
       return nullptr;
     if (!operand->isComplete())
       return fail(s->loc, "sizeof requires a complete object type");
-    result = sizeType(); // Do not decay or load the unevaluated operand.
+    result = sizeType(); 
   } else if (auto *c = dynamic_cast<CastExpr *>(expr)) {
     Type *operand = analyzeExpr(c->operand);
     c->toType = normalizeType(c->toType, c->loc);
