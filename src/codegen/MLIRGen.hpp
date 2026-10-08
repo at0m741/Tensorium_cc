@@ -39,4 +39,6 @@ private:
   mlir::Value emitExpr(const Expr &expr);
   mlir::LogicalResult emitIf(const IfStmt &stmt, mlir::func::FuncOp function);
   mlir::Value emitCondition(const Expr &expr);
+  mlir::LogicalResult emitWhile(const WhileStmt &stmt,
+                                mlir::func::FuncOp function);
 };

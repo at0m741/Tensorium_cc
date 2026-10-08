@@ -479,6 +479,18 @@ void Sema::analyzeNode(Node *node) {
       analyzeNode(stmt->then);
     if (stmt->els)
       analyzeNode(stmt->els);
+  } else if (auto *stmt = dynamic_cast<WhileStmt *>(node)) {
+    Type *condition = analyzeExpr(stmt->cond);
+
+    if (condition) {
+      condition = value(stmt->cond);
+
+      if (!condition->isScalar())
+        fail(stmt->cond->loc, "while requieres a scalar condition");
+    }
+
+    if (stmt->body)
+      analyzeNode(stmt->body);
   } else if (auto *d = dynamic_cast<Decl *>(node)) {
     if (declare(d, false))
       if (auto *v = dynamic_cast<VarDecl *>(d))
@@ -865,7 +877,7 @@ Type *Sema::analyzeExpr(Expr *&expr) {
       return nullptr;
     if (!operand->isComplete())
       return fail(s->loc, "sizeof requires a complete object type");
-    result = sizeType(); 
+    result = sizeType();
   } else if (auto *c = dynamic_cast<CastExpr *>(expr)) {
     Type *operand = analyzeExpr(c->operand);
     c->toType = normalizeType(c->toType, c->loc);

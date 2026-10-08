@@ -598,6 +598,8 @@ ReturnStmt *Parser::parseReturnStmt() {
 Stmt *Parser::parseStmt() {
   if (check(TokenKind::KW_IF))
     return parseIfStmt();
+  if (check(TokenKind::KW_WHILE))
+    return parseWhileStmt();
   if (check(TokenKind::L_BRACE))
     return parseCompoundStmt();
 
@@ -664,6 +666,29 @@ IfStmt *Parser::parseIfStmt() {
     if (!stmt->els || _diag.hasErrors())
       return nullptr;
   }
+
+  return stmt;
+}
+
+WhileStmt *Parser::parseWhileStmt() {
+  auto *stmt = new WhileStmt();
+  stmt->loc = expect(TokenKind::KW_WHILE, "expected while").loc;
+
+  expect(TokenKind::L_PAREN, "expected '(' after while loop condition");
+  if (_diag.hasErrors())
+    return nullptr;
+
+  stmt->cond = parseExpr();
+  if (!stmt->cond || _diag.hasErrors())
+    return nullptr;
+
+  expect(TokenKind::R_PAREN, "expected ')' after while loop conditions");
+  if (_diag.hasErrors())
+    return nullptr;
+
+  stmt->body = parseStmt();
+  if (!stmt->body || _diag.hasErrors())
+    return nullptr;
 
   return stmt;
 }
