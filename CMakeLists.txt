@@ -93,6 +93,12 @@ if(CC1_ENABLE_MLIR)
 
   cc1_add_module(cc1_mlir
     src/codegen/MLIRGen.cpp
+    src/codegen/MLIRGenTypes.cpp
+    src/codegen/MLIRGenExpr.cpp
+    src/codegen/MLIRGenBinary.cpp
+    src/codegen/MLIRGenFunctions.cpp
+    src/codegen/MLIRGenStmt.cpp
+    src/codegen/MLIRGenControlFlow.cpp
   )
 
   target_include_directories(cc1_mlir SYSTEM PUBLIC

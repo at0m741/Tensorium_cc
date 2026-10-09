@@ -312,12 +312,101 @@ void avoids_cascading_diagnostics() {
          c.diag.diagnostics()[0].col == 22);
 }
 
+void accepts_for_loops() {
+  const char *cases[] = {
+      "int f(int n) { int r = 0; for (int i = 0; i < n; i++) r += i; return r; "
+      "}",
+      "int f(int n) { for (n = 0; n < 4; ++n) ; return n; }",
+      "int f(void) { for (;;) break; return 0; }",
+      "int f(int n) { for (;n;) { --n; continue; } return n; }",
+      "int f(int n) { for (;;n--) if (n == 0) break; return n; }",
+      "int f(int n) { for (int i = 0;;) { if (i == n) break; ++i; } return n; "
+      "}",
+      "int f(int *p) { for (;p;) break; return 0; }",
+      "void step(void); void f(int n) { for (;n;step()) --n; }",
+      "int f(void) { for (register int i = 0; i < 2; ++i) ; return 0; }",
+      "int f(void) { for (int i = 0; i < 2; ++i) { int i = 3; } return 0; }",
+      "typedef int T; int f(void) { for (int T = 0; T < 2; ++T) ; T x = 0; "
+      "return x; }",
+      ("int f(void) { for (int i = 0; i < 2; ++i) { while (i) { break; } "
+       "for (int i = 0; i < 3; ++i) continue; continue; } return 0; }"),
+  };
+  for (const char *source : cases) {
+    Context c(source);
+    if (!c.analyze())
+      throw std::runtime_error(std::string(source) + "\n" + c.output.str());
+  }
+}
+
+void resolves_for_scope_and_conversions() {
+  Context c("int f(int n) { int i = 9; for (int i = 0; i < n; i = i + 1) "
+            "i = i + 2; return i; }");
+  EXPECT(c.analyze());
+  auto *fn = c.function("f");
+  auto *outer = dynamic_cast<VarDecl *>(fn->body->items[0]);
+  auto *loop = dynamic_cast<ForStmt *>(fn->body->items[1]);
+  EXPECT(outer && loop);
+  auto *inner = dynamic_cast<VarDecl *>(loop->init);
+  auto *condition = dynamic_cast<BinaryExpr *>(loop->cond);
+  EXPECT(inner && condition && condition->type->kind == Type::INT);
+  auto *loaded = dynamic_cast<ImplicitCastExpr *>(condition->lhs);
+  EXPECT(loaded && loaded->kind == ImplicitCastKind::LValueToRValue);
+  auto *ref = dynamic_cast<IdentExpr *>(loaded->operand);
+  EXPECT(ref && ref->decl == inner);
+  auto *increment = dynamic_cast<BinaryExpr *>(loop->incr);
+  EXPECT(increment && increment->lhs->isLval);
+  EXPECT(dynamic_cast<IdentExpr *>(increment->lhs)->decl == inner);
+  auto *body = dynamic_cast<ExprStmt *>(loop->body);
+  auto *assignment = body ? dynamic_cast<BinaryExpr *>(body->expr) : nullptr;
+  EXPECT(assignment &&
+         dynamic_cast<IdentExpr *>(assignment->lhs)->decl == inner);
+  auto *returned = dynamic_cast<ImplicitCastExpr *>(c.returned("f"));
+  EXPECT(returned &&
+         dynamic_cast<IdentExpr *>(returned->operand)->decl == outer);
+}
+
+void rejects_invalid_for_semantics() {
+  struct Case {
+    const char *source;
+    const char *message;
+  };
+  const Case cases[] = {
+      {"int f(void) { for (int i = 0; i < 2; ++i) ; return i; }",
+       "undeclared identifier 'i'"},
+      {"int f(void) { for (;;x++) { int x = 0; } return 0; }",
+       "undeclared identifier 'x'"},
+      {"void step(void); int f(void) { for (;step();) ; return 0; }",
+       "for requires a scalar condition"},
+      {"int f(void) { for (static int i = 0;;) ; return 0; }",
+       "for initializer declaration"},
+      {"int f(void) { for (extern int i;;) ; return 0; }",
+       "for initializer declaration"},
+      {"int f(void) { for (typedef int T;;) ; return 0; }",
+       "for initializer declaration"},
+      {"int f(void) { for (int g(void);;) ; return 0; }",
+       "for initializer declaration"},
+      {"int f(void) { for (;;1++) ; return 0; }", "modifiable"},
+      {"int f(void) { for (;;) break; continue; return 0; }",
+       "continue outside loop"},
+      {"int f(void) { for (;;) break; break; return 0; }",
+       "break outside loop"},
+  };
+  for (const auto &test : cases) {
+    Context c(test.source);
+    EXPECT(!c.analyze());
+    EXPECT(c.output.str().find(test.message) != std::string::npos);
+  }
+}
+
 int main() {
   struct Test {
     const char *name;
     void (*run)();
   };
   const Test tests[] = {
+      {"accepts_for_loops", accepts_for_loops},
+      {"resolves_for_scope_and_conversions", resolves_for_scope_and_conversions},
+      {"rejects_invalid_for_semantics", rejects_invalid_for_semantics},
       {"accepts_supported_programs", accepts_supported_programs},
       {"rejects_semantic_errors", rejects_semantic_errors},
       {"inspects_conversion_tree", inspects_conversion_tree},

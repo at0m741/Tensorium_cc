@@ -325,7 +325,7 @@ done:
   if (isUnsigned)
     return types.uintTy();
   if (hasInt || isSigned)
-    return types.intTy(); // ← utilise les deux
+    return types.intTy(); 
   return types.intTy();
 }
 
@@ -600,6 +600,8 @@ Stmt *Parser::parseStmt() {
     return parseIfStmt();
   if (check(TokenKind::KW_WHILE))
     return parseWhileStmt();
+  if (check(TokenKind::KW_FOR))
+    return parseForStmt();
   if (check(TokenKind::L_BRACE))
     return parseCompoundStmt();
 
@@ -706,4 +708,62 @@ WhileStmt *Parser::parseWhileStmt() {
     return nullptr;
 
   return stmt;
+}
+
+ForStmt *Parser::parseForStmt() {
+  auto stmt = std::make_unique<ForStmt>();
+  stmt->loc = expect(TokenKind::KW_FOR, "expected 'for'").loc;
+  auto savedTypedefs = _typedefs;
+  auto fail = [&]() -> ForStmt * {
+    _typedefs = std::move(savedTypedefs);
+    return nullptr;
+  };
+
+  expect(TokenKind::L_PAREN, "expected '(' after for");
+  if (_diag.hasErrors())
+    return fail();
+
+  if (isTypeName()) {
+    // parseDecl consumes the first semicolon itself.
+    stmt->init = parseDecl(false);
+    if (!stmt->init || _diag.hasErrors())
+      return fail();
+  } else {
+    if (!check(TokenKind::SEMICOLON)) {
+      auto *init = new ExprStmt();
+      init->loc = _cur.loc;
+      init->expr = parseExpr();
+      stmt->init = init;
+      if (!init->expr || _diag.hasErrors())
+        return fail();
+    }
+    expect(TokenKind::SEMICOLON, "expected ';' after for initializer");
+    if (_diag.hasErrors())
+      return fail();
+  }
+
+  if (!check(TokenKind::SEMICOLON)) {
+    stmt->cond = parseExpr();
+    if (!stmt->cond || _diag.hasErrors())
+      return fail();
+  }
+  expect(TokenKind::SEMICOLON, "expected ';' after for condition");
+  if (_diag.hasErrors())
+    return fail();
+
+  if (!check(TokenKind::R_PAREN)) {
+    stmt->incr = parseExpr();
+    if (!stmt->incr || _diag.hasErrors())
+      return fail();
+  }
+  expect(TokenKind::R_PAREN, "expected ')' after for increment");
+  if (_diag.hasErrors())
+    return fail();
+
+  stmt->body = parseStmt();
+  if (!stmt->body || _diag.hasErrors())
+    return fail();
+
+  _typedefs = std::move(savedTypedefs);
+  return stmt.release();
 }

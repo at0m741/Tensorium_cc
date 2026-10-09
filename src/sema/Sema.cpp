@@ -507,13 +507,37 @@ void Sema::analyzeNode(Node *node) {
       analyzeNode(stmt->body);
 
     --loopDepth;
-  } else if (auto *stmt = dynamic_cast<BreakStmt *>(node)) {
-    if (loopDepth == 0)
-      fail(stmt->loc, "break outside loop");
+  } else if (auto *stmt = dynamic_cast<ForStmt *>(node)) {
+    symbols.push();
 
-  } else if (auto *stmt = dynamic_cast<ContinueStmt *>(node)) {
-    if (loopDepth == 0)
-      fail(stmt->loc, "continue outside loop");
+    if (auto *decl = dynamic_cast<Decl *>(stmt->init)) {
+      auto *var = dynamic_cast<VarDecl *>(decl);
+      if (!var ||
+          (var->sc != StorageClass::NONE && var->sc != StorageClass::AUTO &&
+           var->sc != StorageClass::REGISTER))
+        fail(decl->loc, "for initializer declaration requires an automatic or "
+                        "register object");
+      else
+        analyzeNode(var);
+    } else if (stmt->init) {
+      analyzeNode(stmt->init);
+    }
+
+    if (stmt->cond && analyzeExpr(stmt->cond)) {
+      Type *condition = value(stmt->cond);
+      if (!condition->isScalar())
+        fail(stmt->cond->loc, "for requires a scalar condition");
+    }
+
+    if (stmt->incr && analyzeExpr(stmt->incr))
+      value(stmt->incr);
+
+    ++loopDepth;
+    if (stmt->body)
+      analyzeNode(stmt->body);
+    --loopDepth;
+
+    symbols.pop();
 
   } else if (auto *d = dynamic_cast<Decl *>(node)) {
     if (declare(d, false))

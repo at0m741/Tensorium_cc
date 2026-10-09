@@ -581,6 +581,105 @@ bool diagnoses_invalid_local_initializers() {
   return true;
 }
 
+bool parses_for_clauses() {
+  struct Case {
+    const char *header;
+    bool init, condition, increment, declaration;
+  };
+  const Case cases[] = {
+      {";;", false, false, false, false},
+      {"i = 0;;", true, false, false, false},
+      {";i < 4;", false, true, false, false},
+      {";;i++", false, false, true, false},
+      {"i = 0;i < 4;", true, true, false, false},
+      {"i = 0;;i++", true, false, true, false},
+      {";i < 4;i++", false, true, true, false},
+      {"i = 0;i < 4;i++", true, true, true, false},
+      {"int i = 0;i < 4;++i", true, true, true, true},
+      {"int i = 0;;", true, false, false, true},
+      {"i = 0, j = 1;i < 4;i++, j++", true, true, true, false},
+  };
+  for (const auto &test : cases) {
+    ParserTestContext ctx(std::string("void f(void) { for (") + test.header +
+                          "); }");
+    auto *tu = ctx.parser.parse();
+    TEST_EXPECT(!ctx.diag.hasErrors());
+    auto *fn = findFunction(tu, "f");
+    TEST_EXPECT(fn && fn->body->items.size() == 1);
+    auto *loop = dynamic_cast<ForStmt *>(fn->body->items[0]);
+    TEST_EXPECT(loop && bool(loop->init) == test.init);
+    TEST_EXPECT(bool(loop->cond) == test.condition);
+    TEST_EXPECT(bool(loop->incr) == test.increment);
+    if (loop->init) {
+      TEST_EXPECT(bool(dynamic_cast<VarDecl *>(loop->init)) ==
+                  test.declaration);
+      if (!test.declaration)
+        TEST_EXPECT(dynamic_cast<ExprStmt *>(loop->init));
+    }
+    auto *body = dynamic_cast<ExprStmt *>(loop->body);
+    TEST_EXPECT(body && !body->expr);
+  }
+  return true;
+}
+
+bool restores_typedefs_after_for() {
+  ParserTestContext ctx(
+      "typedef int T; int f(void) { for (int T = 0; sizeof(T); T++) {} "
+      "T x = 1; return x; } T global;");
+  auto *tu = ctx.parser.parse();
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  auto *fn = findFunction(tu, "f");
+  TEST_EXPECT(fn && fn->body->items.size() == 3);
+  auto *loop = dynamic_cast<ForStmt *>(fn->body->items[0]);
+  auto *size = loop ? dynamic_cast<SizeofExpr *>(loop->cond) : nullptr;
+  TEST_EXPECT(size && !size->ofType && dynamic_cast<IdentExpr *>(size->expr));
+  auto *x = dynamic_cast<VarDecl *>(fn->body->items[1]);
+  TEST_EXPECT(x && x->type->kind == Type::INT);
+  auto *global = dynamic_cast<VarDecl *>(tu->decls.back());
+  TEST_EXPECT(global && global->type->kind == Type::INT);
+  return true;
+}
+
+bool rejects_malformed_for_headers() {
+  struct Case {
+    const char *source;
+    const char *message;
+  };
+  const Case cases[] = {
+      {"void f(void) { for ;;) ; }", "expected '(' after for"},
+      {"void f(void) { for (i = 0 i < 4; i++) ; }",
+       "expected ';' after for initializer"},
+      {"void f(void) { for (; i < 4) ; }", "expected ';' after for condition"},
+      {"void f(void) { for (;;i++;) ; }", "expected ')' after for increment"},
+      {"void f(void) { for (int i = ; ; ) ; }", "expected expression"},
+      {"void f(void) { for (int i = 0 i < 4; i++) ; }",
+       "expected ';' after declaration"},
+      {"void f(void) { for (;;) }", "expected expression"},
+  };
+  for (const auto &test : cases) {
+    ParserTestContext ctx(test.source);
+    ctx.parser.parse();
+    TEST_EXPECT(ctx.diag.errorCount() == 1);
+    TEST_EXPECT(ctx.diag.diagnostics().front().message == test.message);
+  }
+  return true;
+}
+
+bool dumps_for_clause_names() {
+  ParserTestContext ctx("void f(void) { for (;;) break; }");
+  auto *tu = ctx.parser.parse();
+  TEST_EXPECT(!ctx.diag.hasErrors());
+  std::ostringstream output;
+  dumpAST(tu, output);
+  TEST_EXPECT(output.str().find("ForStmt\n") != std::string::npos);
+  TEST_EXPECT(output.str().find("Init <empty>\n") != std::string::npos);
+  TEST_EXPECT(output.str().find("Condition <empty>\n") != std::string::npos);
+  TEST_EXPECT(output.str().find("Increment <empty>\n") != std::string::npos);
+  TEST_EXPECT(output.str().find("BreakStmt\n") != std::string::npos);
+  TEST_EXPECT(output.str().find("UnsupportedNode") == std::string::npos);
+  return true;
+}
+
 int main() {
   struct TestEntry {
     const char *name;
@@ -588,6 +687,10 @@ int main() {
   };
 
   const std::vector<TestEntry> tests = {
+      {"parses_for_clauses", parses_for_clauses},
+      {"restores_typedefs_after_for", restores_typedefs_after_for},
+      {"rejects_malformed_for_headers", rejects_malformed_for_headers},
+      {"dumps_for_clause_names", dumps_for_clause_names},
       {"parses_simple_int_decl", parses_simple_int_decl},
       {"parses_local_declarations_and_typedef_scopes", parses_local_declarations_and_typedef_scopes},
       {"diagnoses_invalid_local_initializers", diagnoses_invalid_local_initializers},
