@@ -11,6 +11,7 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/ValueRange.h>
 #include <mlir/Support/LLVM.h>
+#include <vector>
 
 MLIRGen::MLIRGen(mlir::MLIRContext &context, DiagnosticEngine &diagnostics,
                  const TargetInfo &targetInfo)
@@ -546,7 +547,23 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
     } else if (auto *stmt = dynamic_cast<const WhileStmt *>(item)) {
       if (mlir::failed(emitWhile(*stmt, function)))
         return mlir::failure();
+    } else if (auto *stmt = dynamic_cast<const BreakStmt *>(item)) {
+      if (loopTargets.empty()) {
+        diag.error(stmt->loc, "MLIR break outside loop");
+        return mlir::failure();
+      }
 
+      builder.create<mlir::cf::BranchOp>(builder.getUnknownLoc(),
+                                         loopTargets.back().breakTarget);
+
+    } else if (auto *stmt = dynamic_cast<const ContinueStmt *>(item)) {
+      if (loopTargets.empty()) {
+        diag.error(stmt->loc, "MLIR continue outside loop");
+        return mlir::failure();
+      }
+
+      builder.create<mlir::cf::BranchOp>(builder.getUnknownLoc(),
+                                         loopTargets.back().continueTarget);
     } else if (auto *ret = dynamic_cast<const ReturnStmt *>(item)) {
       llvm::SmallVector<mlir::Value> operands;
       if (ret->value) {
@@ -583,6 +600,7 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
     op.setPublic();
   values.clear();
   storage.clear();
+  loopTargets.clear();
   if (function.params.size() != entry->getNumArguments()) {
     diag.error(function.loc, "MLIR parameter count mismatch");
     return mlir::failure();
@@ -678,11 +696,15 @@ mlir::LogicalResult MLIRGen::emitWhile(const WhileStmt &stmt,
   builder.create<mlir::cf::CondBranchOp>(loc, condition, bodyBlock, exitBlock);
 
   builder.setInsertionPointToStart(bodyBlock);
+  loopTargets.push_back({exitBlock, conditionBlock});
   CompoundStmt wrapper;
   wrapper.items.push_back(stmt.body);
-  if (mlir::failed(emitBlock(wrapper, function)))
-    return mlir::failure();
+  mlir::LogicalResult result = emitBlock(wrapper, function);
 
+  loopTargets.pop_back();
+
+  if (mlir::failed(result))
+    return mlir::failure();
   auto *currentBlock = builder.getInsertionBlock();
   if (currentBlock->empty() ||
       !currentBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {

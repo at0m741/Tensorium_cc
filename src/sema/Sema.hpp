@@ -24,6 +24,7 @@ private:
   std::unordered_map<Decl *, FuncDecl *> definitions;
   std::vector<std::unique_ptr<ImplicitCastExpr>> casts;
   FuncDecl *currentFunction = nullptr;
+  unsigned loopDepth = 0;
 
   bool declare(Decl *decl, bool global);
   void analyzeFunction(FuncDecl *fn);

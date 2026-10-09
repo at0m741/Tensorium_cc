@@ -415,6 +415,7 @@ bool Sema::analyze(TranslationUnit &unit) {
 
 void Sema::analyzeFunction(FuncDecl *fn) {
   currentFunction = fn;
+  loopDepth = 0;
   symbols.push();
   if (fn->params.size() != fn->type->params.size())
     fail(fn->loc, "parameter names required in function definition");
@@ -447,9 +448,11 @@ void Sema::analyzeBlock(CompoundStmt *block, bool nested) {
 void Sema::analyzeNode(Node *node) {
   if (auto *block = dynamic_cast<CompoundStmt *>(node))
     analyzeBlock(block);
+
   else if (auto *s = dynamic_cast<ExprStmt *>(node)) {
     if (s->expr && analyzeExpr(s->expr))
       value(s->expr);
+
   } else if (auto *s = dynamic_cast<ReturnStmt *>(node)) {
     if (!currentFunction) {
       fail(s->loc, "return outside function");
@@ -465,6 +468,7 @@ void Sema::analyzeNode(Node *node) {
       }
     } else if (!ret->isVoid())
       fail(s->loc, "non-void function must return a value");
+
   } else if (auto *stmt = dynamic_cast<IfStmt *>(node)) {
     Type *condition = analyzeExpr(stmt->cond);
 
@@ -479,6 +483,14 @@ void Sema::analyzeNode(Node *node) {
       analyzeNode(stmt->then);
     if (stmt->els)
       analyzeNode(stmt->els);
+
+  } else if (auto *stmt = dynamic_cast<BreakStmt *>(node)) {
+    if (loopDepth == 0)
+      fail(stmt->loc, "break outside loop");
+
+  } else if (auto *stmt = dynamic_cast<ContinueStmt *>(node)) {
+    if (loopDepth == 0)
+      fail(stmt->loc, "continue outside loop");
   } else if (auto *stmt = dynamic_cast<WhileStmt *>(node)) {
     Type *condition = analyzeExpr(stmt->cond);
 
@@ -489,8 +501,20 @@ void Sema::analyzeNode(Node *node) {
         fail(stmt->cond->loc, "while requieres a scalar condition");
     }
 
+    ++loopDepth;
+
     if (stmt->body)
       analyzeNode(stmt->body);
+
+    --loopDepth;
+  } else if (auto *stmt = dynamic_cast<BreakStmt *>(node)) {
+    if (loopDepth == 0)
+      fail(stmt->loc, "break outside loop");
+
+  } else if (auto *stmt = dynamic_cast<ContinueStmt *>(node)) {
+    if (loopDepth == 0)
+      fail(stmt->loc, "continue outside loop");
+
   } else if (auto *d = dynamic_cast<Decl *>(node)) {
     if (declare(d, false))
       if (auto *v = dynamic_cast<VarDecl *>(d))

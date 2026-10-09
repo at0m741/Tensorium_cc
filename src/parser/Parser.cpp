@@ -605,7 +605,22 @@ Stmt *Parser::parseStmt() {
 
   if (check(TokenKind::KW_RETURN))
     return parseReturnStmt();
-
+  if (check(TokenKind::KW_BREAK)) {
+    auto *stmt = new BreakStmt();
+    stmt->loc = advance().loc;
+    expect(TokenKind::SEMICOLON, "expected ';' after break");
+    if (_diag.hasErrors())
+      return nullptr;
+    return stmt;
+  }
+  if (check(TokenKind::KW_CONTINUE)) {
+    auto *stmt = new ContinueStmt();
+    stmt->loc = advance().loc;
+    expect(TokenKind::SEMICOLON, "expected ';' after continue");
+    if (_diag.hasErrors())
+      return nullptr;
+    return stmt;
+  }
   auto *stmt = new ExprStmt();
   stmt->loc = _cur.loc;
 

@@ -13,6 +13,7 @@
 
 #include "llvm/ADT/DenseMap.h"
 #include <mlir/IR/Value.h>
+#include <vector>
 
 class MLIRGen {
 public:
@@ -25,6 +26,13 @@ private:
   mlir::OpBuilder builder;
   DiagnosticEngine &diag;
   const TargetInfo &target;
+
+  struct LoopTargets {
+    mlir::Block *breakTarget;
+    mlir::Block *continueTarget;
+  };
+
+  std::vector<LoopTargets> loopTargets;
 
   llvm::DenseMap<const Decl *, mlir::Value> values;
   llvm::DenseMap<const Decl *, mlir::Value> storage;
