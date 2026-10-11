@@ -124,10 +124,9 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
         return {};
       }
 
-      return builder
-          .create<mlir::arith::ConstantIntOp>(
-              builder.getUnknownLoc(), static_cast<int64_t>(literal->val),
-              intType.getWidth())
+      return mlir::arith::ConstantIntOp::create(
+                 builder, builder.getUnknownLoc(),
+                 static_cast<int64_t>(literal->val), intType.getWidth())
           .getResult();
     }
   }
@@ -135,9 +134,8 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
   if (auto *ref = dynamic_cast<const IdentExpr *>(&expr)) {
     auto slot = storage.find(ref->decl);
     if (slot != storage.end())
-      return builder
-          .create<mlir::memref::LoadOp>(builder.getUnknownLoc(), slot->second,
-                                        mlir::ValueRange{})
+      return mlir::memref::LoadOp::create(builder, builder.getUnknownLoc(),
+                                          slot->second, mlir::ValueRange{})
           .getResult();
     auto it = values.find(ref->decl);
     if (it == values.end()) {
@@ -171,20 +169,21 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
       }
       auto loc = builder.getUnknownLoc();
       if (cast->type->kind == Type::BOOL) {
-        auto zero = builder.create<mlir::arith::ConstantIntOp>(loc, 0, from);
-        return builder
-            .create<mlir::arith::CmpIOp>(loc, mlir::arith::CmpIPredicate::ne,
-                                         value, zero.getResult())
+        auto zero = mlir::arith::ConstantIntOp::create(builder, loc, from, 0);
+        return mlir::arith::CmpIOp::create(builder, loc,
+                                           mlir::arith::CmpIPredicate::ne,
+                                           value, zero.getResult())
             .getResult();
       }
       if (from == to)
         return value;
       if (from.getWidth() > to.getWidth())
-        return builder.create<mlir::arith::TruncIOp>(loc, to, value)
+        return mlir::arith::TruncIOp::create(builder, loc, to, value)
             .getResult();
       if (cast->operand->type->isSigned())
-        return builder.create<mlir::arith::ExtSIOp>(loc, to, value).getResult();
-      return builder.create<mlir::arith::ExtUIOp>(loc, to, value).getResult();
+        return mlir::arith::ExtSIOp::create(builder, loc, to, value)
+            .getResult();
+      return mlir::arith::ExtUIOp::create(builder, loc, to, value).getResult();
     }
     diag.error(cast->loc,
                "MLIR generation does not support this implicit conversion yet");
@@ -214,13 +213,12 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
           return {};
         }
         auto type = mlir::MemRefType::get({}, value->second.getType());
-        auto address =
-            builder
-                .create<mlir::memref::AllocaOp>(builder.getUnknownLoc(), type)
-                .getResult();
-        builder.create<mlir::memref::StoreOp>(builder.getUnknownLoc(),
-                                              value->second, address,
-                                              mlir::ValueRange{});
+        auto address = mlir::memref::AllocaOp::create(
+                           builder, builder.getUnknownLoc(), type)
+                           .getResult();
+        mlir::memref::StoreOp::create(builder, builder.getUnknownLoc(),
+                                      value->second, address,
+                                      mlir::ValueRange{});
         storage[ref->decl] = address;
       }
       mlir::Value value = emitExpr(*binary->rhs);
@@ -232,8 +230,8 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
         diag.error(binary->loc, "MLIR assignment types do not match the AST");
         return {};
       }
-      builder.create<mlir::memref::StoreOp>(builder.getUnknownLoc(), value,
-                                            address, mlir::ValueRange{});
+      mlir::memref::StoreOp::create(builder, builder.getUnknownLoc(), value,
+                                    address, mlir::ValueRange{});
       return value;
     }
     if (binary->op >= BinaryOp::EQ && binary->op <= BinaryOp::GEQ) {
@@ -294,10 +292,10 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
 
       auto loc = builder.getUnknownLoc();
       mlir::Value comparison =
-          builder.create<mlir::arith::CmpIOp>(loc, predicate, lhs, rhs)
+          mlir::arith::CmpIOp::create(builder, loc, predicate, lhs, rhs)
               .getResult();
 
-      return builder.create<mlir::arith::ExtUIOp>(loc, resultType, comparison)
+      return mlir::arith::ExtUIOp::create(builder, loc, resultType, comparison)
           .getResult();
     }
     if (binary->op != BinaryOp::ADD && binary->op != BinaryOp::SUB &&
@@ -327,11 +325,11 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
     auto loc = builder.getUnknownLoc();
     switch (binary->op) {
     case BinaryOp::ADD:
-      return builder.create<mlir::arith::AddIOp>(loc, lhs, rhs).getResult();
+      return mlir::arith::AddIOp::create(builder, loc, lhs, rhs).getResult();
     case BinaryOp::SUB:
-      return builder.create<mlir::arith::SubIOp>(loc, lhs, rhs).getResult();
+      return mlir::arith::SubIOp::create(builder, loc, lhs, rhs).getResult();
     case BinaryOp::MUL:
-      return builder.create<mlir::arith::MulIOp>(loc, lhs, rhs).getResult();
+      return mlir::arith::MulIOp::create(builder, loc, lhs, rhs).getResult();
     default:
       break;
     }
@@ -367,8 +365,8 @@ mlir::LogicalResult MLIRGen::declareFunction(const FuncDecl &function) {
     results.push_back(type);
   }
   auto signature = builder.getFunctionType(params, results);
-  auto op = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(),
-                                               function.name, signature);
+  auto op = mlir::func::FuncOp::create(builder, builder.getUnknownLoc(),
+                                       function.name, signature);
   op.setPrivate();
   const Decl *key = function.canonicalDecl ? function.canonicalDecl : &function;
   functions[key] = op;
@@ -410,8 +408,8 @@ mlir::LogicalResult MLIRGen::emitCall(const CallExpr &call,
     }
     args.push_back(value);
   }
-  auto op = builder.create<mlir::func::CallOp>(builder.getUnknownLoc(),
-                                               function, args);
+  auto op = mlir::func::CallOp::create(builder, builder.getUnknownLoc(),
+                                       function, args);
   if (result)
     *result = op.getNumResults() ? op.getResult(0) : mlir::Value{};
   return mlir::success();
@@ -426,10 +424,10 @@ mlir::LogicalResult MLIRGen::emitIf(const IfStmt &stmt,
       continue;
 
     auto type = mlir::MemRefType::get({}, binding.second.getType());
-    auto slot = builder.create<mlir::memref::AllocaOp>(loc, type).getResult();
+    auto slot = mlir::memref::AllocaOp::create(builder, loc, type).getResult();
 
-    builder.create<mlir::memref::StoreOp>(loc, binding.second, slot,
-                                          mlir::ValueRange{});
+    mlir::memref::StoreOp::create(builder, loc, binding.second, slot,
+                                  mlir::ValueRange{});
 
     storage[binding.first] = slot;
   }
@@ -447,8 +445,8 @@ mlir::LogicalResult MLIRGen::emitIf(const IfStmt &stmt,
 
   builder.restoreInsertionPoint(parentPoint);
 
-  builder.create<mlir::cf::CondBranchOp>(loc, condition, thenBlock,
-                                         elseBlock ? elseBlock : mergeBlock);
+  mlir::cf::CondBranchOp::create(builder, loc, condition, thenBlock,
+                                 elseBlock ? elseBlock : mergeBlock);
 
   auto emitBranch = [&](Stmt *branch) -> mlir::LogicalResult {
     CompoundStmt wrapper;
@@ -468,7 +466,7 @@ mlir::LogicalResult MLIRGen::emitIf(const IfStmt &stmt,
 
   bool thenContinues = !terminated();
   if (thenContinues)
-    builder.create<mlir::cf::BranchOp>(loc, mergeBlock);
+    mlir::cf::BranchOp::create(builder, loc, mergeBlock);
 
   bool elseContinues = true;
   if (elseBlock) {
@@ -479,7 +477,7 @@ mlir::LogicalResult MLIRGen::emitIf(const IfStmt &stmt,
 
     elseContinues = !terminated();
     if (elseContinues)
-      builder.create<mlir::cf::BranchOp>(loc, mergeBlock);
+      mlir::cf::BranchOp::create(builder, loc, mergeBlock);
   }
 
   if (!thenContinues && !elseContinues) {
@@ -510,9 +508,8 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
       if (!type)
         return mlir::failure();
       auto address =
-          builder
-              .create<mlir::memref::AllocaOp>(builder.getUnknownLoc(),
-                                              mlir::MemRefType::get({}, type))
+          mlir::memref::AllocaOp::create(builder, builder.getUnknownLoc(),
+                                         mlir::MemRefType::get({}, type))
               .getResult();
       storage[var] = address;
       if (var->init) {
@@ -524,8 +521,8 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
                      "MLIR initializer type does not match the local variable");
           return mlir::failure();
         }
-        builder.create<mlir::memref::StoreOp>(builder.getUnknownLoc(), value,
-                                              address, mlir::ValueRange{});
+        mlir::memref::StoreOp::create(builder, builder.getUnknownLoc(), value,
+                                      address, mlir::ValueRange{});
       }
     } else if (dynamic_cast<const TypedefDecl *>(item)) {
       continue;
@@ -553,8 +550,8 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
         return mlir::failure();
       }
 
-      builder.create<mlir::cf::BranchOp>(builder.getUnknownLoc(),
-                                         loopTargets.back().breakTarget);
+      mlir::cf::BranchOp::create(builder, builder.getUnknownLoc(),
+                                 loopTargets.back().breakTarget);
 
     } else if (auto *stmt = dynamic_cast<const ContinueStmt *>(item)) {
       if (loopTargets.empty()) {
@@ -562,8 +559,8 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
         return mlir::failure();
       }
 
-      builder.create<mlir::cf::BranchOp>(builder.getUnknownLoc(),
-                                         loopTargets.back().continueTarget);
+      mlir::cf::BranchOp::create(builder, builder.getUnknownLoc(),
+                                 loopTargets.back().continueTarget);
     } else if (auto *ret = dynamic_cast<const ReturnStmt *>(item)) {
       llvm::SmallVector<mlir::Value> operands;
       if (ret->value) {
@@ -579,7 +576,7 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
                    "MLIR return types do not match the function signature");
         return mlir::failure();
       }
-      builder.create<mlir::func::ReturnOp>(builder.getUnknownLoc(), operands);
+      mlir::func::ReturnOp::create(builder, builder.getUnknownLoc(), operands);
     } else {
       diag.error(item->loc,
                  "MLIR generation does not support this block item yet");
@@ -620,9 +617,8 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
     if (function.type->retType->isVoid()) {
     } else if (function.name == "main") {
       results.push_back(
-          builder
-              .create<mlir::arith::ConstantIntOp>(builder.getUnknownLoc(), 0,
-                                                  op.getResultTypes().front())
+          mlir::arith::ConstantIntOp::create(builder, builder.getUnknownLoc(),
+                                             op.getResultTypes().front(), 0)
               .getResult());
     } else {
       diag.error(function.loc,
@@ -631,7 +627,7 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
       storage.clear();
       return mlir::failure();
     }
-    builder.create<mlir::func::ReturnOp>(builder.getUnknownLoc(), results);
+    mlir::func::ReturnOp::create(builder, builder.getUnknownLoc(), results);
   }
   values.clear();
   storage.clear();
@@ -655,10 +651,10 @@ mlir::Value MLIRGen::emitCondition(const Expr &expr) {
   auto loc = builder.getUnknownLoc();
 
   auto zero =
-      builder.create<mlir::arith::ConstantIntOp>(loc, 0, type.getWidth());
-  return builder
-      .create<mlir::arith::CmpIOp>(loc, mlir::arith::CmpIPredicate::ne, value,
-                                   zero.getResult())
+      mlir::arith::ConstantIntOp::create(builder, loc, 0, type.getWidth());
+  return mlir::arith::CmpIOp::create(builder, loc,
+                                     mlir::arith::CmpIPredicate::ne, value,
+                                     zero.getResult())
       .getResult();
 }
 
@@ -671,10 +667,10 @@ mlir::LogicalResult MLIRGen::emitWhile(const WhileStmt &stmt,
       continue;
 
     auto type = mlir::MemRefType::get({}, binding.second.getType());
-    auto slot = builder.create<mlir::memref::AllocaOp>(loc, type).getResult();
+    auto slot = mlir::memref::AllocaOp::create(builder, loc, type).getResult();
 
-    builder.create<mlir::memref::StoreOp>(loc, binding.second, slot,
-                                          mlir::ValueRange{});
+    mlir::memref::StoreOp::create(builder, loc, binding.second, slot,
+                                  mlir::ValueRange{});
 
     storage[binding.first] = slot;
   }
@@ -686,14 +682,14 @@ mlir::LogicalResult MLIRGen::emitWhile(const WhileStmt &stmt,
   auto *exitBlock = builder.createBlock(&function.getBody());
 
   builder.restoreInsertionPoint(parentPoint);
-  builder.create<mlir::cf::BranchOp>(loc, conditionBlock);
+  mlir::cf::BranchOp::create(builder, loc, conditionBlock);
 
   builder.setInsertionPointToStart(conditionBlock);
   mlir::Value condition = emitCondition(*stmt.cond);
   if (!condition)
     return mlir::failure();
 
-  builder.create<mlir::cf::CondBranchOp>(loc, condition, bodyBlock, exitBlock);
+  mlir::cf::CondBranchOp::create(builder, loc, condition, bodyBlock, exitBlock);
 
   builder.setInsertionPointToStart(bodyBlock);
   loopTargets.push_back({exitBlock, conditionBlock});
@@ -708,7 +704,7 @@ mlir::LogicalResult MLIRGen::emitWhile(const WhileStmt &stmt,
   auto *currentBlock = builder.getInsertionBlock();
   if (currentBlock->empty() ||
       !currentBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
-    builder.create<mlir::cf::BranchOp>(loc, conditionBlock);
+    mlir::cf::BranchOp::create(builder, loc, conditionBlock);
   }
 
   builder.setInsertionPointToStart(exitBlock);

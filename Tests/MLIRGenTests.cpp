@@ -121,6 +121,65 @@ void lowers_integer_promotions() {
   EXPECT(add.getType().isInteger(32));
 }
 
+void lowers_integer_to_bool_conversions() {
+  for (auto target : {TargetInfo::i386(), TargetInfo::x86_64()}) {
+    for (auto kind : {Type::CHAR, Type::INT, Type::LONG}) {
+      // The parser does not accept _Bool yet; exercise a typed AST directly.
+      TypePool types;
+      ParamDecl parameter;
+      parameter.type = types.make(kind);
+      IdentExpr reference;
+      reference.type = parameter.type;
+      reference.decl = &parameter;
+      ImplicitCastExpr conversion;
+      conversion.kind = ImplicitCastKind::Arithmetic;
+      conversion.type = types.make(Type::BOOL);
+      conversion.operand = &reference;
+      ImplicitCastExpr promotion;
+      promotion.kind = ImplicitCastKind::Arithmetic;
+      promotion.type = types.intTy();
+      promotion.operand = &conversion;
+      ReturnStmt returnStmt;
+      returnStmt.value = &promotion;
+      CompoundStmt body;
+      body.items.push_back(&returnStmt);
+      FuncDecl function;
+      function.name = "to_bool";
+      function.type = types.function(promotion.type, {parameter.type});
+      function.params.push_back(&parameter);
+      function.body = &body;
+      TranslationUnit unit;
+      unit.decls.push_back(&function);
+
+      std::ostringstream output;
+      DiagnosticEngine diag("mlir.c", "", output, DiagnosticColor::Never);
+      mlir::MLIRContext context;
+      MLIRGen generator(context, diag, target);
+      auto module = generator.generate(unit);
+      if (!module)
+        throw std::runtime_error(output.str());
+      EXPECT(!diag.hasErrors());
+      EXPECT(mlir::succeeded(mlir::verify(module.get())));
+      auto fn = module->lookupSymbol<mlir::func::FuncOp>("to_bool");
+      auto &block = fn.getBody().front();
+      auto ret = mlir::cast<mlir::func::ReturnOp>(block.back());
+      auto extension =
+          ret.getOperands().front().getDefiningOp<mlir::arith::ExtUIOp>();
+      EXPECT(extension && extension.getType().isInteger(32));
+      auto comparison =
+          extension.getIn().getDefiningOp<mlir::arith::CmpIOp>();
+      EXPECT(comparison);
+      EXPECT(comparison.getPredicate() == mlir::arith::CmpIPredicate::ne);
+      EXPECT(comparison.getLhs() == block.getArgument(0));
+      auto zero =
+          comparison.getRhs().getDefiningOp<mlir::arith::ConstantIntOp>();
+      EXPECT(zero && zero.value() == 0);
+      EXPECT(zero.getType() == block.getArgument(0).getType());
+      EXPECT(comparison.getType().isInteger(1));
+    }
+  }
+}
+
 void lowers_target_dependent_integer_conversions() {
   for (auto target : {TargetInfo::i386(), TargetInfo::x86_64()}) {
     Context c("int widen(int a, long b) { return a + b; } int "
@@ -323,6 +382,8 @@ int main() {
       {"keeps_parameter_bindings_local_to_each_function",
        keeps_parameter_bindings_local_to_each_function},
       {"lowers_integer_promotions", lowers_integer_promotions},
+      {"lowers_integer_to_bool_conversions",
+       lowers_integer_to_bool_conversions},
       {"lowers_target_dependent_integer_conversions",
        lowers_target_dependent_integer_conversions},
       {"lowers_identity_constants_and_private_functions",
