@@ -10,7 +10,8 @@ Neither mode prints a partial AST after an error in its pipeline.
 
 Sema checks the subset the parser can construct: file-scope variables and
 typedefs, function declarations and definitions, named parameters, nested
-blocks, expression statements, returns, literals, identifiers, unary and binary
+blocks, expression statements, returns, `if`/`else`, `while`, `break`, `continue`,
+literals, identifiers, unary and binary
 operators, assignments, calls, indexing, conditional expressions and `sizeof`.
 Ordinary names and tags use separate namespaces. Parameters hide ordinary
 globals, while references to globals and functions must have a visible declaration
@@ -42,7 +43,7 @@ load. Its result has the target's unsigned pointer-sized integer type;
 unevaluated. Incomplete tentative file-scope arrays become one-element arrays
 at the end of the translation unit unless a later declaration completes them.
 
-## Contract for future MLIR generation
+## Contract for MLIR generation
 
 After a successful analysis:
 
@@ -66,13 +67,15 @@ After a successful analysis:
   the backend must implement short-circuit/branch evaluation and must not emit
   runtime evaluation of a `sizeof` operand.
 
-Keep the parser's AST, its TypePool, Sema, and the source buffers alive while
-consuming this tree. TypePool owns types created by the parser and Sema; Sema owns
-the inserted implicit casts. The existing parser still allocates other AST nodes
-as raw pointers; a shared AST arena is a separate ownership improvement.
+Keep `ASTContext` and the source buffers alive while consuming this tree.
+`ASTContext` owns all AST nodes, including implicit casts inserted by Sema, and
+its `TypePool` owns types created by both stages. Pointers between nodes and
+types are non-owning. Parser and Sema can be destroyed once their passes finish;
+the checked AST remains valid. `CompilerInstance` owns the context and source
+buffers for a complete invocation.
 
-No LLVM/MLIR dependency, IR generator, ABI lowering or target layout computation
-is added by this stage. The first backend can consume checked scalar function
+The AST and semantic analysis modules have no LLVM/MLIR dependency. The optional
+backend consumes checked scalar function
 signatures, parameters, expressions, calls and returns. The current backend uses
 scalar `memref` storage for automatic locals and modified parameters; globals and
 address-taking still need additional storage and pointer support.
@@ -82,7 +85,8 @@ address-taking still need additional storage and pointer support.
 Automatic local declarations and scalar initializers are parsed and checked,
 including declaration visibility, nested scopes, typedef shadowing and initializer
 conversions. Global initializers, multiple declarators, explicit cast syntax,
-control-flow statement syntax, record/enum definitions and full constant-expression evaluation
+additional control-flow syntax (`for`, `do`, `switch`, `goto`), record/enum
+definitions and full constant-expression evaluation
 remain unsupported by the parser. Sema rejects unsupported statements rather
 than silently sending them to a backend. Member access is diagnosed on incomplete
 records; useful member access awaits record definitions and layout support.

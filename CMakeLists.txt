@@ -10,7 +10,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CC1_INCLUDE_DIRS
   ${PROJECT_SOURCE_DIR}/include
-  ${PROJECT_SOURCE_DIR}/src
 )
 
 add_library(cc1_project_options INTERFACE)
@@ -19,7 +18,7 @@ target_compile_features(cc1_project_options INTERFACE cxx_std_17)
 add_library(cc1_warnings INTERFACE)
 if(CC1_ENABLE_WARNINGS)
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    target_compile_options(cc1_warnings INTERFACE -O3 -Wall -Wextra -Wpedantic)
+    target_compile_options(cc1_warnings INTERFACE -Wall -Wextra -Wpedantic)
   elseif(MSVC)
     target_compile_options(cc1_warnings INTERFACE /W4 /permissive-)
   endif()
@@ -37,46 +36,54 @@ function(cc1_add_module target)
   )
 endfunction()
 
-cc1_add_module(cc1_diagnostics
-  src/Diagnostic.cpp
+cc1_add_module(cc1_basic
+  lib/Basic/Diagnostic.cpp
+  lib/Basic/SourceManager.cpp
+  lib/Basic/TargetInfo.cpp
 )
 
-cc1_add_module(cc1_lexer
-  src/lexer/Lexer.cpp
-  src/lexer/Token.cpp
+cc1_add_module(cc1_ast
+  lib/AST/Type.cpp
+  lib/AST/ASTDump.cpp
 )
-target_link_libraries(cc1_lexer PUBLIC cc1_diagnostics)
+target_link_libraries(cc1_ast PUBLIC cc1_basic)
 
-cc1_add_module(cc1_preprocessor
-  src/SourceManager.cpp
-  src/preprocessor/Preprocessor.cpp
-  src/preprocessor/PPExpression.cpp
+cc1_add_module(cc1_lex
+  lib/Lex/Lexer.cpp
+  lib/Lex/Token.cpp
+  lib/Lex/Preprocessor.cpp
+  lib/Lex/PPExpression.cpp
 )
-target_link_libraries(cc1_preprocessor PUBLIC cc1_lexer)
+target_link_libraries(cc1_lex PUBLIC cc1_basic)
 
-cc1_add_module(cc1_parser
-  src/parser/Type.cpp
-  src/parser/Parser.cpp
-  src/parser/Pratt.cpp
-  src/parser/ASTDump.cpp
+cc1_add_module(cc1_parse
+  lib/Parse/Parser.cpp
+  lib/Parse/ParseDecl.cpp
+  lib/Parse/ParseStmt.cpp
+  lib/Parse/ParseExpr.cpp
 )
-target_link_libraries(cc1_parser PUBLIC cc1_lexer)
+target_link_libraries(cc1_parse PUBLIC cc1_ast cc1_lex)
 
 cc1_add_module(cc1_sema
-  src/sema/Sema.cpp
+  lib/Sema/Sema.cpp
+  lib/Sema/SemaDecl.cpp
+  lib/Sema/SemaStmt.cpp
+  lib/Sema/SemaExpr.cpp
+  lib/Sema/SemaConversions.cpp
 )
-target_link_libraries(cc1_sema PUBLIC cc1_parser)
+target_link_libraries(cc1_sema PUBLIC cc1_ast)
 
-cc1_add_module(cc1_codegen
-  src/codegen/TargetInfo.cpp
+cc1_add_module(cc1_frontend
+  lib/Frontend/CompilerInvocation.cpp
+  lib/Frontend/CompilerInstance.cpp
 )
-target_link_libraries(cc1_codegen PUBLIC cc1_sema)
-
-add_library(cc1_frontend INTERFACE)
-target_link_libraries(cc1_frontend INTERFACE cc1_codegen cc1_preprocessor)
+target_link_libraries(cc1_frontend
+  PUBLIC cc1_ast
+  PRIVATE cc1_parse cc1_sema
+)
 
 add_executable(cc1
-  src/main.cpp
+  tools/cc1/main.cpp
 )
 
 target_link_libraries(cc1
@@ -91,17 +98,22 @@ if(CC1_ENABLE_MLIR)
   enable_language(C)
   find_package(MLIR REQUIRED CONFIG)
 
-  cc1_add_module(cc1_mlir
-    src/codegen/MLIRGen.cpp
+  cc1_add_module(cc1_codegen
+    lib/CodeGen/MLIRGen.cpp
+    lib/CodeGen/MLIRGenTypes.cpp
+    lib/CodeGen/MLIRGenExpr.cpp
+    lib/CodeGen/MLIRGenFunction.cpp
+    lib/CodeGen/MLIRGenStmt.cpp
+    lib/CodeGen/MLIRGenMemory.cpp
   )
 
-  target_include_directories(cc1_mlir SYSTEM PUBLIC
+  target_include_directories(cc1_codegen SYSTEM PUBLIC
     ${LLVM_INCLUDE_DIRS}
     ${MLIR_INCLUDE_DIRS}
   )
 
-  target_link_libraries(cc1_mlir PUBLIC
-    cc1_sema
+  target_link_libraries(cc1_codegen PUBLIC
+    cc1_ast
     MLIRIR
     MLIRArithDialect
     MLIRFuncDialect
@@ -109,8 +121,8 @@ if(CC1_ENABLE_MLIR)
     MLIRControlFlowDialect
   )
 
-  target_link_libraries(cc1 PRIVATE cc1_mlir)
-  target_compile_definitions(cc1 PRIVATE CC1_ENABLE_MLIR=1)
+  target_link_libraries(cc1_frontend PRIVATE cc1_codegen)
+  target_compile_definitions(cc1_frontend PRIVATE CC1_ENABLE_MLIR=1)
 endif()
 if(BUILD_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/Tests/CMakeLists.txt)
   add_subdirectory(Tests)

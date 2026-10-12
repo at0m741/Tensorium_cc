@@ -1,11 +1,26 @@
-add_subdirectory(parser)
+add_subdirectory(Parse)
 
-add_executable(cc1_preprocessor_tests PreprocessorTests.cpp)
+add_executable(cc1_ast_tests AST/ASTContextTests.cpp)
+target_link_libraries(cc1_ast_tests
+  PRIVATE cc1_parse cc1_sema cc1_project_options cc1_warnings
+)
+add_test(NAME ast_context COMMAND cc1_ast_tests)
+
+add_executable(cc1_frontend_tests Frontend/FrontendTests.cpp)
+target_compile_definitions(cc1_frontend_tests
+  PRIVATE CC1_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}/Tests"
+)
+target_link_libraries(cc1_frontend_tests
+  PRIVATE cc1_frontend cc1_project_options cc1_warnings
+)
+add_test(NAME frontend COMMAND cc1_frontend_tests)
+
+add_executable(cc1_preprocessor_tests Lex/PreprocessorTests.cpp)
 target_compile_definitions(cc1_preprocessor_tests
   PRIVATE CC1_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}/Tests"
 )
 target_link_libraries(cc1_preprocessor_tests
-  PRIVATE cc1_preprocessor cc1_parser cc1_project_options cc1_warnings
+  PRIVATE cc1_lex cc1_project_options cc1_warnings
 )
 add_test(NAME preprocessor COMMAND cc1_preprocessor_tests)
 set_tests_properties(preprocessor PROPERTIES TIMEOUT 10)
@@ -32,9 +47,9 @@ if(CC1_REFERENCE_CLANG AND Python3_Interpreter_FOUND)
   set_tests_properties(preprocessor_clang_comparison PROPERTIES TIMEOUT 20)
 endif()
 
-add_executable(cc1_diagnostic_tests DiagnosticTests.cpp)
+add_executable(cc1_diagnostic_tests Basic/DiagnosticTests.cpp)
 target_link_libraries(cc1_diagnostic_tests
-  PRIVATE cc1_lexer cc1_project_options cc1_warnings
+  PRIVATE cc1_lex cc1_project_options cc1_warnings
 )
 add_test(NAME diagnostics COMMAND cc1_diagnostic_tests)
 
@@ -126,9 +141,9 @@ add_test(NAME cli_dump_tokens
 )
 set_tests_properties(cli_dump_tokens PROPERTIES TIMEOUT 5)
 
-add_executable(cc1_sema_tests SemaTests.cpp)
+add_executable(cc1_sema_tests Sema/SemaTests.cpp)
 target_link_libraries(cc1_sema_tests
-  PRIVATE cc1_frontend cc1_project_options cc1_warnings
+  PRIVATE cc1_parse cc1_sema cc1_project_options cc1_warnings
 )
 add_test(NAME sema COMMAND cc1_sema_tests)
 set_tests_properties(sema PROPERTIES TIMEOUT 10)
@@ -151,9 +166,9 @@ add_test(NAME mlir_cli
 set_tests_properties(mlir_cli PROPERTIES TIMEOUT 10)
 
 if(CC1_ENABLE_MLIR)
-  add_executable(cc1_mlir_tests MLIRGenTests.cpp)
+  add_executable(cc1_mlir_tests CodeGen/MLIRGenTests.cpp)
   target_link_libraries(cc1_mlir_tests
-    PRIVATE cc1_mlir cc1_frontend cc1_project_options cc1_warnings
+    PRIVATE cc1_codegen cc1_parse cc1_sema cc1_project_options cc1_warnings
   )
   add_test(NAME mlir_codegen COMMAND cc1_mlir_tests)
   set_tests_properties(mlir_codegen PROPERTIES TIMEOUT 10)
