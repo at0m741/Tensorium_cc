@@ -10,7 +10,7 @@ Neither mode prints a partial AST after an error in its pipeline.
 
 Sema checks the subset the parser can construct: file-scope variables and
 typedefs, function declarations and definitions, named parameters, nested
-blocks, expression statements, returns, `if`/`else`, `while`, `break`, `continue`,
+blocks, expression statements, returns, `if`/`else`, `while`, `for`, `break`, `continue`,
 literals, identifiers, unary and binary
 operators, assignments, calls, indexing, conditional expressions and `sizeof`.
 Ordinary names and tags use separate namespaces. Parameters hide ordinary
@@ -85,7 +85,7 @@ address-taking still need additional storage and pointer support.
 Automatic local declarations and scalar initializers are parsed and checked,
 including declaration visibility, nested scopes, typedef shadowing and initializer
 conversions. Global initializers, multiple declarators, explicit cast syntax,
-additional control-flow syntax (`for`, `do`, `switch`, `goto`), record/enum
+additional control-flow syntax (`do`, `switch`, `goto`), record/enum
 definitions and full constant-expression evaluation
 remain unsupported by the parser. Sema rejects unsupported statements rather
 than silently sending them to a backend. Member access is diagnosed on incomplete

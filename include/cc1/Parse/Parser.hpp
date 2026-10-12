@@ -67,6 +67,7 @@ private:
   CompoundStmt *parseCompoundStmt();
   IfStmt *parseIfStmt();
   WhileStmt *parseWhileStmt();
+  ForStmt *parseForStmt();
   ReturnStmt *parseReturnStmt();
 
   Expr *parseExpr(int minPrec = 0);

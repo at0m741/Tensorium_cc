@@ -102,6 +102,8 @@ if(CC1_ENABLE_MLIR)
     lib/CodeGen/MLIRGen.cpp
     lib/CodeGen/MLIRGenTypes.cpp
     lib/CodeGen/MLIRGenExpr.cpp
+    lib/CodeGen/MLIRGenBinary.cpp
+    lib/CodeGen/MLIRGenControlFlow.cpp
     lib/CodeGen/MLIRGenFunction.cpp
     lib/CodeGen/MLIRGenStmt.cpp
     lib/CodeGen/MLIRGenMemory.cpp

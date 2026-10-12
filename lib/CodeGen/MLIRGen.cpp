@@ -61,38 +61,3 @@ MLIRGen::generate(const TranslationUnit &unit) {
 
   return module;
 }
-
-mlir::LogicalResult MLIRGen::declareFunction(const FuncDecl &function) {
-  if (function.type->variadic || (function.type->retType->kind != Type::INT &&
-                                  !function.type->retType->isVoid())) {
-    diag.error(function.loc, "MLIR generation is not implemented "
-                             "for this declaration yet");
-    return mlir::failure();
-  }
-  llvm::SmallVector<mlir::Type> params, results;
-  for (const Type *param : function.type->params) {
-    if (param->quals.isVolatile) {
-      diag.error(
-          function.loc,
-          "MLIR generation does not support volatile parameter storage yet");
-      return mlir::failure();
-    }
-    mlir::Type type = lowerType(*param, function.loc);
-    if (!type)
-      return mlir::failure();
-    params.push_back(type);
-  }
-  if (!function.type->retType->isVoid()) {
-    mlir::Type type = lowerType(*function.type->retType, function.loc);
-    if (!type)
-      return mlir::failure();
-    results.push_back(type);
-  }
-  auto signature = builder.getFunctionType(params, results);
-  auto op = mlir::func::FuncOp::create(builder, builder.getUnknownLoc(),
-                                       function.name, signature);
-  op.setPrivate();
-  const Decl *key = function.canonicalDecl ? function.canonicalDecl : &function;
-  functions[key] = op;
-  return mlir::success();
-}

@@ -113,6 +113,19 @@ void dumpAST(const Node *node, std::ostream &out, unsigned depth, bool typed) {
     child(stmt->cond);
     child(stmt->body);
 
+  } else if (auto *stmt = dynamic_cast<const ForStmt *>(node)) {
+    out << "ForStmt\n";
+    auto clause = [&](const char *name, const Node *value) {
+      out << std::string((depth + 1) * 2, ' ') << name
+          << (value ? "\n" : " <empty>\n");
+      if (value)
+        dumpAST(value, out, depth + 2, typed);
+    };
+    clause("Init", stmt->init);
+    clause("Condition", stmt->cond);
+    clause("Increment", stmt->incr);
+    clause("Body", stmt->body);
+
   } else if (dynamic_cast<const BreakStmt *>(node)) {
     out << "BreakStmt\n";
 

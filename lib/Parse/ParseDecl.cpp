@@ -225,7 +225,7 @@ done:
   if (isUnsigned)
     return types.uintTy();
   if (hasInt || isSigned)
-    return types.intTy(); // ← utilise les deux
+    return types.intTy();
   return types.intTy();
 }
 

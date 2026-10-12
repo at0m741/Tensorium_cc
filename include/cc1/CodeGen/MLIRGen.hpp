@@ -45,13 +45,18 @@ private:
   void materializeParameters();
 
   mlir::Type lowerType(const ::Type &type, SourceLoc loc);
+  mlir::Value emitExpr(const Expr &expr);
+  mlir::Value emitBinary(const BinaryExpr &binary);
+
+  // Function declarations, definitions and calls.
   mlir::LogicalResult declareFunction(const FuncDecl &function);
   mlir::LogicalResult emitFunction(const FuncDecl &function);
-  mlir::LogicalResult emitBlock(const CompoundStmt &block,
-                                mlir::func::FuncOp function);
   mlir::LogicalResult emitCall(const CallExpr &call,
                                mlir::Value *result = nullptr);
-  mlir::Value emitExpr(const Expr &expr);
+
+  // Statements and control flow.
+  mlir::LogicalResult emitBlock(const CompoundStmt &block,
+                                mlir::func::FuncOp function);
   mlir::LogicalResult emitIf(const IfStmt &stmt, mlir::func::FuncOp function);
   mlir::Value emitCondition(const Expr &expr);
   mlir::LogicalResult emitWhile(const WhileStmt &stmt,
