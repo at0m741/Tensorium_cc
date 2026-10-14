@@ -172,4 +172,24 @@ if(CC1_ENABLE_MLIR)
   )
   add_test(NAME mlir_codegen COMMAND cc1_mlir_tests)
   set_tests_properties(mlir_codegen PROPERTIES TIMEOUT 10)
+
+  # Run the generated loop as native code when the LLVM tools are installed.
+  find_program(CC1_MLIR_OPT NAMES mlir-opt HINTS ${LLVM_TOOLS_BINARY_DIR})
+  find_program(CC1_MLIR_TRANSLATE NAMES mlir-translate
+    HINTS ${LLVM_TOOLS_BINARY_DIR})
+  find_program(CC1_RUNTIME_CLANG NAMES clang HINTS ${LLVM_TOOLS_BINARY_DIR})
+  if(CC1_MLIR_OPT AND CC1_MLIR_TRANSLATE AND CC1_RUNTIME_CLANG)
+    add_test(NAME mlir_for_runtime
+      COMMAND ${CMAKE_COMMAND}
+        -DCC1=$<TARGET_FILE:cc1>
+        -DMLIR_OPT=${CC1_MLIR_OPT}
+        -DMLIR_TRANSLATE=${CC1_MLIR_TRANSLATE}
+        -DCLANG=${CC1_RUNTIME_CLANG}
+        -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/For_stmt.c
+        -DRUNNER=${CMAKE_CURRENT_SOURCE_DIR}/CodeGen/ForRuntime.c
+        -DSCRATCH_DIR=${CMAKE_CURRENT_BINARY_DIR}/mlir-for-runtime
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckMLIRForRuntime.cmake
+    )
+    set_tests_properties(mlir_for_runtime PROPERTIES TIMEOUT 30)
+  endif()
 endif()

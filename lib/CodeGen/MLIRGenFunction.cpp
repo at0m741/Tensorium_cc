@@ -33,10 +33,24 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
     llvm::SmallVector<mlir::Value> results;
     if (function.type->retType->isVoid()) {
     } else if (function.name == "main") {
+#if LLVM_VERSION_MAJOR >= 22
       results.push_back(
           mlir::arith::ConstantIntOp::create(builder, builder.getUnknownLoc(),
                                              op.getResultTypes().front(), 0)
               .getResult());
+#elif LLVM_VERSION_MAJOR == 21
+      results.push_back(
+          builder
+              .create<mlir::arith::ConstantIntOp>(
+                  builder.getUnknownLoc(), op.getResultTypes().front(), 0)
+              .getResult());
+#else
+      results.push_back(
+          builder
+              .create<mlir::arith::ConstantIntOp>(builder.getUnknownLoc(), 0,
+                                                  op.getResultTypes().front())
+              .getResult());
+#endif
     } else {
       diag.error(function.loc,
                  "MLIR generation requires a return in a non-void function");
@@ -44,7 +58,11 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
       storage.clear();
       return mlir::failure();
     }
+#if LLVM_VERSION_MAJOR >= 22
     mlir::func::ReturnOp::create(builder, builder.getUnknownLoc(), results);
+#else
+    builder.create<mlir::func::ReturnOp>(builder.getUnknownLoc(), results);
+#endif
   }
   values.clear();
   storage.clear();
@@ -86,8 +104,13 @@ mlir::LogicalResult MLIRGen::emitCall(const CallExpr &call,
     }
     args.push_back(value);
   }
+#if LLVM_VERSION_MAJOR >= 22
   auto op = mlir::func::CallOp::create(builder, builder.getUnknownLoc(),
                                        function, args);
+#else
+  auto op = builder.create<mlir::func::CallOp>(builder.getUnknownLoc(),
+                                               function, args);
+#endif
   if (result)
     *result = op.getNumResults() ? op.getResult(0) : mlir::Value{};
   return mlir::success();
@@ -120,8 +143,13 @@ mlir::LogicalResult MLIRGen::declareFunction(const FuncDecl &function) {
     results.push_back(type);
   }
   auto signature = builder.getFunctionType(params, results);
+#if LLVM_VERSION_MAJOR >= 22
   auto op = mlir::func::FuncOp::create(builder, builder.getUnknownLoc(),
                                        function.name, signature);
+#else
+  auto op = builder.create<mlir::func::FuncOp>(builder.getUnknownLoc(),
+                                               function.name, signature);
+#endif
   op.setPrivate();
   const Decl *key = function.canonicalDecl ? function.canonicalDecl : &function;
   functions[key] = op;

@@ -12,6 +12,7 @@
 #include "mlir/IR/OwningOpRef.h"
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/Config/llvm-config.h"
 #include <mlir/IR/Value.h>
 #include <vector>
 
@@ -61,4 +62,5 @@ private:
   mlir::Value emitCondition(const Expr &expr);
   mlir::LogicalResult emitWhile(const WhileStmt &stmt,
                                 mlir::func::FuncOp function);
+  mlir::LogicalResult emitFor(const ForStmt &stmt, mlir::func::FuncOp function);
 };

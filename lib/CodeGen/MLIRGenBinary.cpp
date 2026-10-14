@@ -76,12 +76,23 @@ mlir::Value MLIRGen::emitBinary(const BinaryExpr &binary) {
       return {};
 
     auto loc = builder.getUnknownLoc();
+#if LLVM_VERSION_MAJOR >= 22
     mlir::Value comparison =
         mlir::arith::CmpIOp::create(builder, loc, predicate, lhs, rhs)
             .getResult();
+#else
+    mlir::Value comparison =
+        builder.create<mlir::arith::CmpIOp>(loc, predicate, lhs, rhs)
+            .getResult();
+#endif
 
+#if LLVM_VERSION_MAJOR >= 22
     return mlir::arith::ExtUIOp::create(builder, loc, resultType, comparison)
         .getResult();
+#else
+    return builder.create<mlir::arith::ExtUIOp>(loc, resultType, comparison)
+        .getResult();
+#endif
   }
   if (binary.op != BinaryOp::ADD && binary.op != BinaryOp::SUB &&
       binary.op != BinaryOp::MUL) {
@@ -110,11 +121,23 @@ mlir::Value MLIRGen::emitBinary(const BinaryExpr &binary) {
   auto loc = builder.getUnknownLoc();
   switch (binary.op) {
   case BinaryOp::ADD:
+#if LLVM_VERSION_MAJOR >= 22
     return mlir::arith::AddIOp::create(builder, loc, lhs, rhs).getResult();
+#else
+    return builder.create<mlir::arith::AddIOp>(loc, lhs, rhs).getResult();
+#endif
   case BinaryOp::SUB:
+#if LLVM_VERSION_MAJOR >= 22
     return mlir::arith::SubIOp::create(builder, loc, lhs, rhs).getResult();
+#else
+    return builder.create<mlir::arith::SubIOp>(loc, lhs, rhs).getResult();
+#endif
   case BinaryOp::MUL:
+#if LLVM_VERSION_MAJOR >= 22
     return mlir::arith::MulIOp::create(builder, loc, lhs, rhs).getResult();
+#else
+    return builder.create<mlir::arith::MulIOp>(loc, lhs, rhs).getResult();
+#endif
   default:
     break;
   }

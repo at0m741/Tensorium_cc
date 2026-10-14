@@ -17,10 +17,18 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
         return {};
       }
 
+#if LLVM_VERSION_MAJOR >= 22
       return mlir::arith::ConstantIntOp::create(
                  builder, builder.getUnknownLoc(),
                  static_cast<int64_t>(literal->val), intType.getWidth())
           .getResult();
+#else
+      return builder
+          .create<mlir::arith::ConstantIntOp>(
+              builder.getUnknownLoc(), static_cast<int64_t>(literal->val),
+              intType.getWidth())
+          .getResult();
+#endif
     }
   }
 
@@ -60,21 +68,47 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
       }
       auto loc = builder.getUnknownLoc();
       if (cast->type->kind == Type::BOOL) {
+#if LLVM_VERSION_MAJOR >= 22
         auto zero = mlir::arith::ConstantIntOp::create(builder, loc, from, 0);
+#elif LLVM_VERSION_MAJOR == 21
+        auto zero = builder.create<mlir::arith::ConstantIntOp>(loc, from, 0);
+#else
+        auto zero = builder.create<mlir::arith::ConstantIntOp>(loc, 0, from);
+#endif
+#if LLVM_VERSION_MAJOR >= 22
         return mlir::arith::CmpIOp::create(builder, loc,
                                            mlir::arith::CmpIPredicate::ne,
                                            value, zero.getResult())
             .getResult();
+#else
+        return builder
+            .create<mlir::arith::CmpIOp>(loc, mlir::arith::CmpIPredicate::ne,
+                                         value, zero.getResult())
+            .getResult();
+#endif
       }
       if (from == to)
         return value;
       if (from.getWidth() > to.getWidth())
+#if LLVM_VERSION_MAJOR >= 22
         return mlir::arith::TruncIOp::create(builder, loc, to, value)
             .getResult();
+#else
+        return builder.create<mlir::arith::TruncIOp>(loc, to, value)
+            .getResult();
+#endif
       if (cast->operand->type->isSigned())
+#if LLVM_VERSION_MAJOR >= 22
         return mlir::arith::ExtSIOp::create(builder, loc, to, value)
             .getResult();
+#else
+        return builder.create<mlir::arith::ExtSIOp>(loc, to, value).getResult();
+#endif
+#if LLVM_VERSION_MAJOR >= 22
       return mlir::arith::ExtUIOp::create(builder, loc, to, value).getResult();
+#else
+      return builder.create<mlir::arith::ExtUIOp>(loc, to, value).getResult();
+#endif
     }
     diag.error(cast->loc,
                "MLIR generation does not support this implicit conversion yet");

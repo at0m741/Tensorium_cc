@@ -55,14 +55,22 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
     } else if (auto *stmt = dynamic_cast<const WhileStmt *>(item)) {
       if (mlir::failed(emitWhile(*stmt, function)))
         return mlir::failure();
+    } else if (auto *stmt = dynamic_cast<const ForStmt *>(item)) {
+      if (mlir::failed(emitFor(*stmt, function)))
+        return mlir::failure();
     } else if (auto *stmt = dynamic_cast<const BreakStmt *>(item)) {
       if (loopTargets.empty()) {
         diag.error(stmt->loc, "MLIR break outside loop");
         return mlir::failure();
       }
 
+#if LLVM_VERSION_MAJOR >= 22
       mlir::cf::BranchOp::create(builder, builder.getUnknownLoc(),
                                  loopTargets.back().breakTarget);
+#else
+      builder.create<mlir::cf::BranchOp>(builder.getUnknownLoc(),
+                                         loopTargets.back().breakTarget);
+#endif
 
     } else if (auto *stmt = dynamic_cast<const ContinueStmt *>(item)) {
       if (loopTargets.empty()) {
@@ -70,8 +78,13 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
         return mlir::failure();
       }
 
+#if LLVM_VERSION_MAJOR >= 22
       mlir::cf::BranchOp::create(builder, builder.getUnknownLoc(),
                                  loopTargets.back().continueTarget);
+#else
+      builder.create<mlir::cf::BranchOp>(builder.getUnknownLoc(),
+                                         loopTargets.back().continueTarget);
+#endif
     } else if (auto *ret = dynamic_cast<const ReturnStmt *>(item)) {
       llvm::SmallVector<mlir::Value> operands;
       if (ret->value) {
@@ -87,7 +100,11 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
                    "MLIR return types do not match the function signature");
         return mlir::failure();
       }
+#if LLVM_VERSION_MAJOR >= 22
       mlir::func::ReturnOp::create(builder, builder.getUnknownLoc(), operands);
+#else
+      builder.create<mlir::func::ReturnOp>(builder.getUnknownLoc(), operands);
+#endif
     } else {
       diag.error(item->loc,
                  "MLIR generation does not support this block item yet");

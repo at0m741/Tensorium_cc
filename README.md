@@ -11,6 +11,11 @@ ctest --test-dir build --output-on-failure
 
 Enable MLIR using the configuration directories of the installed LLVM/MLIR:
 
+The backend supports MLIR 20 and 21 using `OpBuilder::create`; MLIR 22 and newer
+use the operations' static `create` methods. The installed LLVM version selects
+the API at compile time, including the integer constant argument order that
+changed in MLIR 21.
+
 ```sh
 cmake -S . -B build-mlir -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug \
   -DCC1_ENABLE_MLIR=ON \

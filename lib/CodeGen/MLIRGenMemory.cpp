@@ -2,8 +2,13 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 Address MLIRGen::createScalarStorage(mlir::Type type, const Type &objectType) {
+#if LLVM_VERSION_MAJOR >= 22
   auto allocation = mlir::memref::AllocaOp::create(
       builder, builder.getUnknownLoc(), mlir::MemRefType::get({}, type));
+#else
+  auto allocation = builder.create<mlir::memref::AllocaOp>(
+      builder.getUnknownLoc(), mlir::MemRefType::get({}, type));
+#endif
 
   return {allocation.getResult(), type, &objectType};
 }
@@ -34,14 +39,26 @@ Address MLIRGen::emitLValue(const Expr &expr) {
 }
 
 mlir::Value MLIRGen::emitLoad(Address address) {
+#if LLVM_VERSION_MAJOR >= 22
   return mlir::memref::LoadOp::create(builder, builder.getUnknownLoc(),
                                       address.base, mlir::ValueRange{})
       .getResult();
+#else
+  return builder
+      .create<mlir::memref::LoadOp>(builder.getUnknownLoc(), address.base,
+                                    mlir::ValueRange{})
+      .getResult();
+#endif
 }
 
 void MLIRGen::emitStore(mlir::Value value, Address address) {
+#if LLVM_VERSION_MAJOR >= 22
   mlir::memref::StoreOp::create(builder, builder.getUnknownLoc(), value,
                                 address.base, mlir::ValueRange{});
+#else
+  builder.create<mlir::memref::StoreOp>(builder.getUnknownLoc(), value,
+                                        address.base, mlir::ValueRange{});
+#endif
 }
 
 void MLIRGen::materializeParameters() {

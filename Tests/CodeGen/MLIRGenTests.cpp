@@ -369,6 +369,204 @@ void shares_parameter_storage_across_nested_control_flow() {
   EXPECT(continues == 2 && breaks == 1);
 }
 
+mlir::cf::CondBranchOp comparisonBranch(mlir::arith::CmpIOp comparison) {
+  return mlir::cast<mlir::cf::CondBranchOp>(comparison->getBlock()->back());
+}
+
+mlir::Block *forIncrement(mlir::func::FuncOp function, mlir::Value counter) {
+  mlir::Block *increment = nullptr;
+  function.walk([&](mlir::memref::StoreOp store) {
+    if (store.getMemRef() == counter &&
+        store->getOperand(0).getDefiningOp<mlir::arith::AddIOp>()) {
+      EXPECT(!increment);
+      increment = store->getBlock();
+    }
+  });
+  EXPECT(increment);
+  return increment;
+}
+
+void routes_for_continue_through_increment_and_break_to_exit() {
+  Context c("int count(int n) { int result = 0; "
+            "for (int i = 0; i < n; i = i + 1) { "
+            "if (i == 2) continue; if (i == 5) break; "
+            "result = result + 1; } return result; }");
+  auto module = c.generate();
+  auto function = module->lookupSymbol<mlir::func::FuncOp>("count");
+  mlir::arith::CmpIOp loop, skip, stop;
+  function.walk([&](mlir::arith::CmpIOp comparison) {
+    if (comparison.getPredicate() == mlir::arith::CmpIPredicate::slt)
+      loop = comparison;
+    if (comparison.getPredicate() != mlir::arith::CmpIPredicate::eq)
+      return;
+    auto constant =
+        comparison.getRhs().getDefiningOp<mlir::arith::ConstantIntOp>();
+    EXPECT(constant);
+    if (constant.value() == 2)
+      skip = comparison;
+    if (constant.value() == 5)
+      stop = comparison;
+  });
+  EXPECT(loop && skip && stop);
+  auto counter = loop.getLhs().getDefiningOp<mlir::memref::LoadOp>();
+  EXPECT(counter);
+  auto *increment = forIncrement(function, counter.getMemRef());
+  auto *condition = loop->getBlock();
+  auto *exit = comparisonBranch(loop).getFalseDest();
+  EXPECT(mlir::cast<mlir::cf::BranchOp>(function.getBody().front().back())
+             .getDest() == condition);
+  EXPECT(mlir::cast<mlir::cf::BranchOp>(increment->back()).getDest() ==
+         condition);
+  EXPECT(mlir::cast<mlir::cf::BranchOp>(
+             comparisonBranch(skip).getTrueDest()->back())
+             .getDest() == increment);
+  EXPECT(mlir::cast<mlir::cf::BranchOp>(
+             comparisonBranch(stop).getTrueDest()->back())
+             .getDest() == exit);
+  EXPECT(mlir::cast<mlir::cf::BranchOp>(
+             comparisonBranch(stop).getFalseDest()->back())
+             .getDest() == increment);
+  EXPECT(mlir::isa<mlir::func::ReturnOp>(exit->back()));
+
+  unsigned initializations = 0;
+  function.walk([&](mlir::memref::StoreOp store) {
+    if (store.getMemRef() != counter.getMemRef() ||
+        !store->getOperand(0).getDefiningOp<mlir::arith::ConstantIntOp>())
+      return;
+    ++initializations;
+    EXPECT(store->getBlock() == &function.getBody().front());
+  });
+  EXPECT(initializations == 1);
+}
+
+void lowers_for_with_omitted_clauses() {
+  Context c("int finite(int n) { for (; n > 0;) n = n - 1; return n; } "
+            "int infinite(void) { for (;;) break; return 7; }");
+  auto module = c.generate();
+  auto finite = module->lookupSymbol<mlir::func::FuncOp>("finite");
+  auto *condition =
+      mlir::cast<mlir::cf::BranchOp>(finite.getBody().front().back()).getDest();
+  auto test = mlir::cast<mlir::cf::CondBranchOp>(condition->back());
+  auto *increment =
+      mlir::cast<mlir::cf::BranchOp>(test.getTrueDest()->back()).getDest();
+  EXPECT(increment->getOperations().size() == 1);
+  EXPECT(mlir::cast<mlir::cf::BranchOp>(increment->back()).getDest() ==
+         condition);
+  EXPECT(mlir::isa<mlir::func::ReturnOp>(test.getFalseDest()->back()));
+
+  auto infinite = module->lookupSymbol<mlir::func::FuncOp>("infinite");
+  auto *always =
+      mlir::cast<mlir::cf::BranchOp>(infinite.getBody().front().back())
+          .getDest();
+  EXPECT(always->getOperations().size() == 1);
+  auto *body = mlir::cast<mlir::cf::BranchOp>(always->back()).getDest();
+  EXPECT(body->getOperations().size() == 1);
+  auto *exit = mlir::cast<mlir::cf::BranchOp>(body->back()).getDest();
+  EXPECT(exit != always && exit != body);
+  EXPECT(mlir::isa<mlir::func::ReturnOp>(exit->back()));
+}
+
+void preserves_for_initializer_condition_and_void_increment_calls() {
+  Context c("void start(void); int ready(void); void step(void); "
+            "void f(void) { for (start(); ready(); step()) continue; }");
+  auto module = c.generate();
+  auto function = module->lookupSymbol<mlir::func::FuncOp>("f");
+  mlir::func::CallOp start, ready, step;
+  function.walk([&](mlir::func::CallOp call) {
+    if (call.getCallee() == "start") {
+      EXPECT(!start);
+      start = call;
+    } else if (call.getCallee() == "ready") {
+      EXPECT(!ready);
+      ready = call;
+    } else if (call.getCallee() == "step") {
+      EXPECT(!step);
+      step = call;
+    }
+  });
+  EXPECT(start && ready && step);
+  EXPECT(start->getBlock() == &function.getBody().front());
+  auto *condition =
+      mlir::cast<mlir::cf::BranchOp>(start->getBlock()->back()).getDest();
+  EXPECT(ready->getBlock() == condition);
+  auto test = mlir::cast<mlir::cf::CondBranchOp>(condition->back());
+  EXPECT(mlir::cast<mlir::cf::BranchOp>(test.getTrueDest()->back()).getDest() ==
+         step->getBlock());
+  EXPECT(step.getNumResults() == 0);
+  EXPECT(mlir::cast<mlir::cf::BranchOp>(step->getBlock()->back()).getDest() ==
+         condition);
+  EXPECT(mlir::isa<mlir::func::ReturnOp>(test.getFalseDest()->back()));
+}
+
+void keeps_nested_for_jump_targets_separate() {
+  Context c("int f(int n) { for (int i = 0; i < n; i = i + 1) { "
+            "for (int j = 0; j < n; j = j + 1) { "
+            "if (j == 1) continue; break; } "
+            "if (i == 2) continue; break; } return 0; }");
+  auto module = c.generate();
+  auto function = module->lookupSymbol<mlir::func::FuncOp>("f");
+  std::vector<mlir::arith::CmpIOp> loops, skips;
+  function.walk([&](mlir::arith::CmpIOp comparison) {
+    if (comparison.getPredicate() == mlir::arith::CmpIPredicate::slt)
+      loops.push_back(comparison);
+    if (comparison.getPredicate() == mlir::arith::CmpIPredicate::eq)
+      skips.push_back(comparison);
+  });
+  EXPECT(loops.size() == 2 && skips.size() == 2);
+  for (auto skip : skips) {
+    auto counter = skip.getLhs().getDefiningOp<mlir::memref::LoadOp>();
+    EXPECT(counter);
+    mlir::arith::CmpIOp loop;
+    for (auto candidate : loops) {
+      auto load = candidate.getLhs().getDefiningOp<mlir::memref::LoadOp>();
+      if (load && load.getMemRef() == counter.getMemRef())
+        loop = candidate;
+    }
+    EXPECT(loop);
+    auto *increment = forIncrement(function, counter.getMemRef());
+    auto test = comparisonBranch(skip);
+    EXPECT(
+        mlir::cast<mlir::cf::BranchOp>(test.getTrueDest()->back()).getDest() ==
+        increment);
+    EXPECT(
+        mlir::cast<mlir::cf::BranchOp>(test.getFalseDest()->back()).getDest() ==
+        comparisonBranch(loop).getFalseDest());
+    EXPECT(mlir::cast<mlir::cf::BranchOp>(increment->back()).getDest() ==
+           loop->getBlock());
+  }
+}
+
+void preserves_for_initializer_shadowing_and_body_returns() {
+  Context c("int f(int i) { for (int i = 0; i < 2; i = i + 1) { "
+            "if (i == 1) return i; } return i; }");
+  auto module = c.generate();
+  auto function = module->lookupSymbol<mlir::func::FuncOp>("f");
+  mlir::Value parameterStorage, counterStorage;
+  function.walk([&](mlir::memref::StoreOp store) {
+    if (store->getOperand(0) == function.getArgument(0))
+      parameterStorage = store.getMemRef();
+  });
+  function.walk([&](mlir::arith::CmpIOp comparison) {
+    if (comparison.getPredicate() == mlir::arith::CmpIPredicate::slt)
+      counterStorage =
+          comparison.getLhs().getDefiningOp<mlir::memref::LoadOp>().getMemRef();
+  });
+  EXPECT(parameterStorage && counterStorage);
+  EXPECT(parameterStorage != counterStorage);
+  unsigned parameterReturns = 0, counterReturns = 0;
+  function.walk([&](mlir::func::ReturnOp ret) {
+    auto load = ret.getOperands().front().getDefiningOp<mlir::memref::LoadOp>();
+    EXPECT(load);
+    if (load.getMemRef() == parameterStorage)
+      ++parameterReturns;
+    else if (load.getMemRef() == counterStorage)
+      ++counterReturns;
+    else
+      EXPECT(false);
+  });
+  EXPECT(parameterReturns == 1 && counterReturns == 1);
+}
+
 void rejects_unsupported_constructs() {
   struct Case {
     const char *source;
@@ -381,6 +579,12 @@ void rejects_unsupported_constructs() {
        "does not support this implicit conversion"},
       {"int f(volatile int x) { return x; }", "volatile parameter storage"},
       {"int f(int x) { return x += 1; }",
+       "does not support this binary operator"},
+      {"int f(int n) { for (n / 2; n; n = n - 1) {} return n; }",
+       "does not support this binary operator"},
+      {"int f(int n) { for (; n / 2; n = n - 1) {} return n; }",
+       "does not support this binary operator"},
+      {"int f(int n) { for (; n; n += 1) {} return n; }",
        "does not support this binary operator"},
       {"int f(int *p) { return *p; }", "does not support type 'int*'"},
       {"int global;", "not implemented for this declaration"},
@@ -428,6 +632,15 @@ int main() {
        converts_local_initializers_and_preserves_explicit_returns},
       {"shares_parameter_storage_across_nested_control_flow",
        shares_parameter_storage_across_nested_control_flow},
+      {"routes_for_continue_through_increment_and_break_to_exit",
+       routes_for_continue_through_increment_and_break_to_exit},
+      {"lowers_for_with_omitted_clauses", lowers_for_with_omitted_clauses},
+      {"preserves_for_initializer_condition_and_void_increment_calls",
+       preserves_for_initializer_condition_and_void_increment_calls},
+      {"keeps_nested_for_jump_targets_separate",
+       keeps_nested_for_jump_targets_separate},
+      {"preserves_for_initializer_shadowing_and_body_returns",
+       preserves_for_initializer_shadowing_and_body_returns},
       {"rejects_unsupported_constructs", rejects_unsupported_constructs},
   };
   int failed = 0;
