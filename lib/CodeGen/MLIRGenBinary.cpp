@@ -4,17 +4,19 @@
 
 mlir::Value MLIRGen::emitBinary(const BinaryExpr &binary) {
   if (binary.op == BinaryOp::ASSIGN) {
-    mlir::Value address = emitLValue(*binary.lhs);
+    Address address = emitLValue(*binary.lhs);
     if (!address)
       return {};
+
     mlir::Value value = emitExpr(*binary.rhs);
     if (!value)
       return {};
-    auto type = mlir::cast<mlir::MemRefType>(address.getType());
-    if (value.getType() != type.getElementType()) {
+
+    if (value.getType() != address.elementType) {
       diag.error(binary.loc, "MLIR assignment types do not match the AST");
       return {};
     }
+
     emitStore(value, address);
     return value;
   }

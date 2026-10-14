@@ -22,7 +22,7 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
       mlir::Type type = lowerType(*var->type, var->loc);
       if (!type)
         return mlir::failure();
-      auto address = createScalarStorage(type);
+      auto address = createScalarStorage(type, *var->type);
       storage[var] = address;
       if (var->init) {
         mlir::Value value = emitExpr(*var->init);
