@@ -1,8 +1,8 @@
 # Compiler architecture
 
 The compiler keeps parsing, semantic analysis and code generation as separate
-passes. Public headers live under `include/cc1/<component>`; implementation files
-live under `lib/<component>`. Project includes always use the `cc1/` prefix.
+passes. C frontend headers live under `include/cc1/<component>`; implementation
+files live under `lib/<component>`. Frontend includes use the `cc1/` prefix.
 
 | Component | CMake target | Responsibility |
 | --- | --- | --- |
@@ -83,6 +83,11 @@ Tests live under `Tests/Basic`, `Tests/AST`, `Tests/Lex`, `Tests/Parse`,
 retain their existing paths. AST tests cover destruction and conversions that
 outlive Parser/Sema; frontend tests cover retained ASTs and stream output;
 CodeGen tests cover parameter storage across nested control flow.
+
+The planned reusable MLIR backend has a separate `include/tensorium` and
+`lib/tensorium` boundary. See [Tensorium MLIR backend architecture](mlir_backend.md)
+for dialect, transformation, conversion, pipeline and runtime responsibilities.
+These planned components are not yet implemented.
 
 When changing a boundary, validate builds with `CC1_ENABLE_MLIR=OFF` and `ON`.
 Ownership changes should also be checked with AddressSanitizer and

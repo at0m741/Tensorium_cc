@@ -29,7 +29,8 @@ Public headers live in `include/cc1`, implementations in `lib`, and the CLI in
 `tools/cc1`. Tests are grouped by component under `Tests`; existing C fixtures
 remain available at their original paths. See [the architecture](docs/architecture.md)
 for module dependencies and AST ownership, and [semantic analysis](docs/sema.md)
-for the frontend/backend contract.
+for the frontend/backend contract. The [MLIR backend design](docs/mlir_backend.md)
+defines the planned Tensorium and MemProtect dialect boundaries and migration.
 
 C++ formatting uses the repository's `.clang-format`. Optimization follows
 `CMAKE_BUILD_TYPE`; warning settings are controlled by `CC1_ENABLE_WARNINGS`.
