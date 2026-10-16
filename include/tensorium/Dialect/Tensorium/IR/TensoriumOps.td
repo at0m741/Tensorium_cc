@@ -34,4 +34,60 @@ def Tensorium_AllocaOp : Tensorium_Op<"alloca"> {
   let hasVerifier = 1;
 }
 
+def Tensorium_LoadOp : Tensorium_Op<"load", [
+  TypesMatchWith<
+    "result type matches the pointee type of 'address'",
+    "address", "result",
+    "::llvm::cast<::tensorium::PtrType>($_self).getPointeeType()"
+  >
+]> {
+  let summary = "Read one object through a typed pointer";
+
+  let description = [{
+    Reads one complete object through a pointer.
+    The result type is the pointee type.
+
+    Requires a live, initialized object with sufficient alignment.
+    This is an ordinary non-atomic, non-volatile access.
+  }];
+
+  let arguments = (ins
+    Arg<Tensorium_PtrType,
+        "address of the object to read",
+        [MemRead]>:$address
+  );
+
+  let results = (outs AnyType:$result);
+
+  let assemblyFormat = "$address attr-dict `:` type($address)";
+}
+
+def Tensorium_StoreOp : Tensorium_Op<"store", [
+  TypesMatchWith<
+    "value type matches the pointee type of 'address'",
+    "address", "value",
+    "::llvm::cast<::tensorium::PtrType>($_self).getPointeeType()"
+  >
+]> {
+  let summary = "Write one object through a typed pointer";
+
+  let description = [{
+    Writes one complete object through a pointer.
+    The value type must match the pointee type.
+
+    Requires a live object with sufficient alignment.
+    This is an ordinary non-atomic, non-volatile access.
+  }];
+
+  let arguments = (ins
+    AnyType:$value,
+    Arg<Tensorium_PtrType,
+        "address of the object to write",
+        [MemWrite]>:$address
+  );
+
+  let assemblyFormat =
+      "$value `,` $address attr-dict `:` type($address)";
+}
+
 #endif
