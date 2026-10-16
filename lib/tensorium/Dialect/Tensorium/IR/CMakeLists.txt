@@ -1,15 +1,17 @@
 add_mlir_dialect_library(tensorium_ir
   TensoriumDialect.cpp
   TensoriumTypes.cpp
+  TensoriumOps.cpp
 
   DEPENDS
     TensoriumDialectIncGen
     TensoriumTypesIncGen
+    TensoriumOpsIncGen
 
   LINK_LIBS PUBLIC
     MLIRIR
+    MLIRSideEffectInterfaces
 )
-
 target_compile_features(tensorium_ir PUBLIC cxx_std_17)
 
 target_include_directories(tensorium_ir PUBLIC

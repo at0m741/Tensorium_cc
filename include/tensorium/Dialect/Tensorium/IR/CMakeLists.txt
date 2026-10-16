@@ -29,3 +29,18 @@ mlir_tablegen(TensoriumTypes.cpp.inc
 )
 
 add_public_tablegen_target(TensoriumTypesIncGen)
+
+set(LLVM_TARGET_DEFINITIONS TensoriumOps.td)
+
+mlir_tablegen(TensoriumOps.h.inc
+  -gen-op-decls
+  EXTRA_INCLUDES ${MLIR_INCLUDE_DIRS}
+)
+
+mlir_tablegen(TensoriumOps.cpp.inc
+  -gen-op-defs
+  EXTRA_INCLUDES ${MLIR_INCLUDE_DIRS}
+)
+
+add_public_tablegen_target(TensoriumOpsIncGen)
+
