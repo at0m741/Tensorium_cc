@@ -6,7 +6,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
 #include "mlir/IR/Verifier.h"
 #include <iostream>
 #include <sstream>
@@ -50,6 +50,9 @@ struct Context {
       throw std::runtime_error(output.str());
     EXPECT(mlir::succeeded(mlir::verify(module.get())));
     EXPECT(!diag.hasErrors());
+    module->walk([](mlir::Operation *op) {
+      EXPECT(op->getName().getDialectNamespace() != "memref");
+    });
     return module;
   }
 };
@@ -228,16 +231,16 @@ void lowers_locals_and_discarded_calls() {
             "1; int b = 4; add(a, b); }");
   auto module = c.generate();
   auto fn = module->lookupSymbol<mlir::func::FuncOp>("main");
-  std::vector<mlir::memref::AllocaOp> slots;
-  std::vector<mlir::memref::StoreOp> stores;
-  std::vector<mlir::memref::LoadOp> loads;
+  std::vector<tensorium::AllocaOp> slots;
+  std::vector<tensorium::StoreOp> stores;
+  std::vector<tensorium::LoadOp> loads;
   mlir::func::CallOp call;
   for (auto &op : fn.getBody().front()) {
-    if (auto x = mlir::dyn_cast<mlir::memref::AllocaOp>(op))
+    if (auto x = mlir::dyn_cast<tensorium::AllocaOp>(op))
       slots.push_back(x);
-    if (auto x = mlir::dyn_cast<mlir::memref::StoreOp>(op))
+    if (auto x = mlir::dyn_cast<tensorium::StoreOp>(op))
       stores.push_back(x);
-    if (auto x = mlir::dyn_cast<mlir::memref::LoadOp>(op))
+    if (auto x = mlir::dyn_cast<tensorium::LoadOp>(op))
       loads.push_back(x);
     if (auto x = mlir::dyn_cast<mlir::func::CallOp>(op))
       call = x;
@@ -262,12 +265,12 @@ void respects_local_shadowing_and_mutation() {
             "param(int x) { x = 4; return x; }");
   auto module = c.generate();
   auto fn = module->lookupSymbol<mlir::func::FuncOp>("f");
-  std::vector<mlir::memref::AllocaOp> slots;
-  std::vector<mlir::memref::StoreOp> stores;
+  std::vector<tensorium::AllocaOp> slots;
+  std::vector<tensorium::StoreOp> stores;
   for (auto &op : fn.getBody().front()) {
-    if (auto x = mlir::dyn_cast<mlir::memref::AllocaOp>(op))
+    if (auto x = mlir::dyn_cast<tensorium::AllocaOp>(op))
       slots.push_back(x);
-    if (auto x = mlir::dyn_cast<mlir::memref::StoreOp>(op))
+    if (auto x = mlir::dyn_cast<tensorium::StoreOp>(op))
       stores.push_back(x);
   }
   EXPECT(slots.size() == 2 && stores.size() == 3);
@@ -275,12 +278,12 @@ void respects_local_shadowing_and_mutation() {
   EXPECT(stores[1]->getOperand(1) == slots[1].getResult());
   EXPECT(stores[2]->getOperand(1) == slots[0].getResult());
   auto ret = mlir::cast<mlir::func::ReturnOp>(fn.getBody().front().back());
-  auto load = ret.getOperands().front().getDefiningOp<mlir::memref::LoadOp>();
+  auto load = ret.getOperands().front().getDefiningOp<tensorium::LoadOp>();
   EXPECT(load && load->getOperand(0) == slots[0].getResult());
   auto param = module->lookupSymbol<mlir::func::FuncOp>("param");
   auto paramRet =
       mlir::cast<mlir::func::ReturnOp>(param.getBody().front().back());
-  EXPECT(paramRet.getOperands().front().getDefiningOp<mlir::memref::LoadOp>());
+  EXPECT(paramRet.getOperands().front().getDefiningOp<tensorium::LoadOp>());
 }
 
 void shares_function_symbols_across_prototypes_and_definitions() {
@@ -326,11 +329,13 @@ void converts_local_initializers_and_preserves_explicit_returns() {
             "int ignored = 9; }");
   auto module = c.generate();
   auto fn = module->lookupSymbol<mlir::func::FuncOp>("f");
-  mlir::memref::AllocaOp slot;
+  tensorium::AllocaOp slot;
   for (auto &op : fn.getBody().front())
-    if (auto x = mlir::dyn_cast<mlir::memref::AllocaOp>(op))
+    if (auto x = mlir::dyn_cast<tensorium::AllocaOp>(op))
       slot = x;
-  EXPECT(slot && slot.getType().getElementType().isInteger(16));
+  EXPECT(slot);
+  auto pointerType = mlir::cast<tensorium::PtrType>(slot.getResult().getType());
+  EXPECT(pointerType.getPointeeType().isInteger(16));
   auto ret = mlir::cast<mlir::func::ReturnOp>(fn.getBody().front().back());
   EXPECT(ret.getOperands().front().getDefiningOp<mlir::arith::ExtSIOp>());
   auto mainFn = module->lookupSymbol<mlir::func::FuncOp>("main");
@@ -350,7 +355,7 @@ void shares_parameter_storage_across_nested_control_flow() {
   auto function = module->lookupSymbol<mlir::func::FuncOp>("f");
   auto &entry = function.getBody().front();
   unsigned allocations = 0;
-  function.walk([&](mlir::memref::AllocaOp allocation) {
+  function.walk([&](tensorium::AllocaOp allocation) {
     ++allocations;
     EXPECT(allocation->getBlock() == &entry);
   });
@@ -375,8 +380,8 @@ mlir::cf::CondBranchOp comparisonBranch(mlir::arith::CmpIOp comparison) {
 
 mlir::Block *forIncrement(mlir::func::FuncOp function, mlir::Value counter) {
   mlir::Block *increment = nullptr;
-  function.walk([&](mlir::memref::StoreOp store) {
-    if (store.getMemRef() == counter &&
+  function.walk([&](tensorium::StoreOp store) {
+    if (store.getAddress() == counter &&
         store->getOperand(0).getDefiningOp<mlir::arith::AddIOp>()) {
       EXPECT(!increment);
       increment = store->getBlock();
@@ -408,9 +413,9 @@ void routes_for_continue_through_increment_and_break_to_exit() {
       stop = comparison;
   });
   EXPECT(loop && skip && stop);
-  auto counter = loop.getLhs().getDefiningOp<mlir::memref::LoadOp>();
+  auto counter = loop.getLhs().getDefiningOp<tensorium::LoadOp>();
   EXPECT(counter);
-  auto *increment = forIncrement(function, counter.getMemRef());
+  auto *increment = forIncrement(function, counter.getAddress());
   auto *condition = loop->getBlock();
   auto *exit = comparisonBranch(loop).getFalseDest();
   EXPECT(mlir::cast<mlir::cf::BranchOp>(function.getBody().front().back())
@@ -429,8 +434,8 @@ void routes_for_continue_through_increment_and_break_to_exit() {
   EXPECT(mlir::isa<mlir::func::ReturnOp>(exit->back()));
 
   unsigned initializations = 0;
-  function.walk([&](mlir::memref::StoreOp store) {
-    if (store.getMemRef() != counter.getMemRef() ||
+  function.walk([&](tensorium::StoreOp store) {
+    if (store.getAddress() != counter.getAddress() ||
         !store->getOperand(0).getDefiningOp<mlir::arith::ConstantIntOp>())
       return;
     ++initializations;
@@ -514,16 +519,16 @@ void keeps_nested_for_jump_targets_separate() {
   });
   EXPECT(loops.size() == 2 && skips.size() == 2);
   for (auto skip : skips) {
-    auto counter = skip.getLhs().getDefiningOp<mlir::memref::LoadOp>();
+    auto counter = skip.getLhs().getDefiningOp<tensorium::LoadOp>();
     EXPECT(counter);
     mlir::arith::CmpIOp loop;
     for (auto candidate : loops) {
-      auto load = candidate.getLhs().getDefiningOp<mlir::memref::LoadOp>();
-      if (load && load.getMemRef() == counter.getMemRef())
+      auto load = candidate.getLhs().getDefiningOp<tensorium::LoadOp>();
+      if (load && load.getAddress() == counter.getAddress())
         loop = candidate;
     }
     EXPECT(loop);
-    auto *increment = forIncrement(function, counter.getMemRef());
+    auto *increment = forIncrement(function, counter.getAddress());
     auto test = comparisonBranch(skip);
     EXPECT(
         mlir::cast<mlir::cf::BranchOp>(test.getTrueDest()->back()).getDest() ==
@@ -542,24 +547,24 @@ void preserves_for_initializer_shadowing_and_body_returns() {
   auto module = c.generate();
   auto function = module->lookupSymbol<mlir::func::FuncOp>("f");
   mlir::Value parameterStorage, counterStorage;
-  function.walk([&](mlir::memref::StoreOp store) {
+  function.walk([&](tensorium::StoreOp store) {
     if (store->getOperand(0) == function.getArgument(0))
-      parameterStorage = store.getMemRef();
+      parameterStorage = store.getAddress();
   });
   function.walk([&](mlir::arith::CmpIOp comparison) {
     if (comparison.getPredicate() == mlir::arith::CmpIPredicate::slt)
       counterStorage =
-          comparison.getLhs().getDefiningOp<mlir::memref::LoadOp>().getMemRef();
+          comparison.getLhs().getDefiningOp<tensorium::LoadOp>().getAddress();
   });
   EXPECT(parameterStorage && counterStorage);
   EXPECT(parameterStorage != counterStorage);
   unsigned parameterReturns = 0, counterReturns = 0;
   function.walk([&](mlir::func::ReturnOp ret) {
-    auto load = ret.getOperands().front().getDefiningOp<mlir::memref::LoadOp>();
+    auto load = ret.getOperands().front().getDefiningOp<tensorium::LoadOp>();
     EXPECT(load);
-    if (load.getMemRef() == parameterStorage)
+    if (load.getAddress() == parameterStorage)
       ++parameterReturns;
-    else if (load.getMemRef() == counterStorage)
+    else if (load.getAddress() == counterStorage)
       ++counterReturns;
     else
       EXPECT(false);

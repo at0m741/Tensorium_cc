@@ -166,6 +166,9 @@ add_test(NAME mlir_cli
 set_tests_properties(mlir_cli PROPERTIES TIMEOUT 10)
 
 if(CC1_ENABLE_MLIR)
+  add_subdirectory(Dialect/Tensorium)
+  add_subdirectory(Conversion)
+
   add_executable(cc1_mlir_tests CodeGen/MLIRGenTests.cpp)
   target_link_libraries(cc1_mlir_tests
     PRIVATE cc1_codegen cc1_parse cc1_sema cc1_project_options cc1_warnings
@@ -174,14 +177,22 @@ if(CC1_ENABLE_MLIR)
   set_tests_properties(mlir_codegen PROPERTIES TIMEOUT 10)
 
   # Run the generated loop as native code when the LLVM tools are installed.
-  find_program(CC1_MLIR_OPT NAMES mlir-opt HINTS ${LLVM_TOOLS_BINARY_DIR})
-  find_program(CC1_MLIR_TRANSLATE NAMES mlir-translate
-    HINTS ${LLVM_TOOLS_BINARY_DIR})
+  # Use the tools exported by the selected MLIR package. PATH can still contain
+  # an older installation when multiple LLVM versions coexist.
+  if(TARGET mlir-opt AND TARGET mlir-translate)
+    set(CC1_MLIR_OPT "$<TARGET_FILE:mlir-opt>")
+    set(CC1_MLIR_TRANSLATE "$<TARGET_FILE:mlir-translate>")
+  else()
+    find_program(CC1_MLIR_OPT NAMES mlir-opt HINTS ${LLVM_TOOLS_BINARY_DIR})
+    find_program(CC1_MLIR_TRANSLATE NAMES mlir-translate
+      HINTS ${LLVM_TOOLS_BINARY_DIR})
+  endif()
   find_program(CC1_RUNTIME_CLANG NAMES clang HINTS ${LLVM_TOOLS_BINARY_DIR})
   if(CC1_MLIR_OPT AND CC1_MLIR_TRANSLATE AND CC1_RUNTIME_CLANG)
     add_test(NAME mlir_for_runtime
       COMMAND ${CMAKE_COMMAND}
         -DCC1=$<TARGET_FILE:cc1>
+        -DTENSORIUM_OPT=$<TARGET_FILE:tensorium-opt>
         -DMLIR_OPT=${CC1_MLIR_OPT}
         -DMLIR_TRANSLATE=${CC1_MLIR_TRANSLATE}
         -DCLANG=${CC1_RUNTIME_CLANG}
@@ -191,5 +202,19 @@ if(CC1_ENABLE_MLIR)
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckMLIRForRuntime.cmake
     )
     set_tests_properties(mlir_for_runtime PROPERTIES TIMEOUT 30)
+
+    add_test(NAME tensorium_memory_runtime
+      COMMAND ${CMAKE_COMMAND}
+        -DINPUT_IS_MLIR=ON
+        -DTENSORIUM_OPT=$<TARGET_FILE:tensorium-opt>
+        -DMLIR_OPT=${CC1_MLIR_OPT}
+        -DMLIR_TRANSLATE=${CC1_MLIR_TRANSLATE}
+        -DCLANG=${CC1_RUNTIME_CLANG}
+        -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/Conversion/scalar_memory.mlir
+        -DRUNNER=${CMAKE_CURRENT_SOURCE_DIR}/Conversion/ScalarMemoryRuntime.c
+        -DSCRATCH_DIR=${CMAKE_CURRENT_BINARY_DIR}/tensorium-memory-runtime
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckMLIRForRuntime.cmake
+    )
+    set_tests_properties(tensorium_memory_runtime PROPERTIES TIMEOUT 30)
   endif()
 endif()

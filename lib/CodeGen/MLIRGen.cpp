@@ -1,8 +1,8 @@
 #include "cc1/CodeGen/MLIRGen.hpp"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Verifier.h"
+#include "tensorium/Dialect/Tensorium/IR/TensoriumDialect.h"
 #include "llvm/ADT/SmallVector.h"
 
 MLIRGen::MLIRGen(mlir::MLIRContext &context, DiagnosticEngine &diagnostics,
@@ -10,7 +10,7 @@ MLIRGen::MLIRGen(mlir::MLIRContext &context, DiagnosticEngine &diagnostics,
     : builder(&context), diag(diagnostics), target(targetInfo) {
   context
       .loadDialect<mlir::arith::ArithDialect, mlir::func::FuncDialect,
-                   mlir::memref::MemRefDialect, mlir::cf::ControlFlowDialect>();
+                   tensorium::TensoriumDialect, mlir::cf::ControlFlowDialect>();
 }
 
 mlir::OwningOpRef<mlir::ModuleOp>

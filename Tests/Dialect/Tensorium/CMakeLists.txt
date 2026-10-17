@@ -1,0 +1,6 @@
+add_executable(tensorium_ir_tests TensoriumIRTests.cpp)
+target_link_libraries(tensorium_ir_tests PRIVATE
+  tensorium_ir MLIRParser MLIRFuncDialect cc1_project_options cc1_warnings
+)
+add_test(NAME tensorium_ir COMMAND tensorium_ir_tests)
+set_tests_properties(tensorium_ir PROPERTIES TIMEOUT 10)

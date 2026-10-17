@@ -1,9 +1,16 @@
 # Tensorium MLIR backend architecture
 
-This document defines the planned backend structure. The dialect libraries,
-conversions, optimizer tool and MemProtect runtime described below are not yet
-implemented. Today, `cc1_codegen` emits `arith`, `cf`, `func` and scalar `memref`
-operations directly.
+The Tensorium dialect, scalar Tensorium-to-MemRef conversion and `tensorium-opt`
+are implemented. `cc1_codegen` emits `tensorium.alloca`, `tensorium.load` and
+`tensorium.store` with `!tensorium.ptr<T>`, alongside `arith`, `cf` and `func`.
+MemProtect, direct LLVM lowering, dedicated pipeline libraries and the runtime
+described below remain planned components.
+
+`--emit-mlir` prints raw Tensorium IR. Run
+`tensorium-opt --convert-tensorium-to-memref` before passing it to the stock
+`mlir-opt`. Native regression tests perform this conversion explicitly, then
+lower standard operations to LLVM and run the generated program at `-O0` and
+`-O2`. Dialect and conversion tests are permanent CTest targets.
 
 ## Module boundaries
 
@@ -73,17 +80,17 @@ directory, never in the source tree.
 | Pipelines | Pass order, options and registration | Transform and conversion libraries |
 | MemProtect runtime | Executable protection support through a defined C ABI | Platform facilities; no frontend or MLIR dependency |
 
-Use separate CMake targets, initially `tensorium_ir` and
-`tensorium_to_memref`, then `memprotect_ir`, transform and conversion targets
-as their implementations arrive. `tensorium_pipelines` composes these targets;
+Use separate CMake targets: `tensorium_ir` and `tensorium_to_memref` currently
+exist; add `memprotect_ir`, transform and further conversion targets as their
+implementations arrive. A future `tensorium_pipelines` composes these targets;
 `tensorium-opt` links the registered dialects, passes and MLIR optimizer support.
 The frontend and core tests must continue to build with `CC1_ENABLE_MLIR=OFF`.
 The runtime gets an independent build option and target.
 
 ## IR and conversion contracts
 
-Start with the `tensorium` dialect namespace and a typed pointer, for example
-`!tensorium.ptr<i32>`, together with local allocation, load and store operations.
+The `tensorium` dialect has typed pointers, for example `!tensorium.ptr<i32>`,
+together with local allocation, load and store operations.
 Retain the existing `arith`, `cf` and `func` operations for arithmetic, branches
 and functions. Add pointer offsets, casts and explicit lifetime operations as
 their semantics and frontend support are implemented.
@@ -133,23 +140,31 @@ behavior and native test pipeline. It is a migration stage, not a specification
 for general C pointers or memory protection. A later direct Tensorium-to-LLVM
 conversion can provide an explicitly selected unprotected pipeline.
 
+The implemented compatibility conversion maps pointers to integer/float objects
+to rank-zero memrefs. It converts internal function signatures, direct calls,
+returns and `cf` block arguments together with memory operations. Nested
+pointers (including pointer-valued storage), external declarations carrying
+Tensorium pointers and unsupported pointer consumers fail conversion. There is
+no implicit pointer ABI adapter or metadata-dropping cast. Scalar external
+declarations remain supported. This conversion does not add runtime protection.
+
 `tensorium-opt` provides textual IR input and independent pass execution.
 Tests cover dialect parsing and verification, conversion legality and execution.
 The stock `mlir-opt` can consume output only after project operations have been
 lowered to the standard dialects it registers.
 
-## First implementation milestone
+## Completed first implementation milestone
 
-1. Add Tensorium IR definitions, registration and the `tensorium_ir` target.
-2. Implement typed local allocation, load and store with verifier/effect tests.
-3. Add `tensorium_to_memref` for the current scalar subset, including conversion
+1. Tensorium IR definitions, registration and the `tensorium_ir` target.
+2. Typed local allocation, load and store with verifier/effect tests.
+3. `tensorium_to_memref` for the current scalar subset, including conversion
    of pointer-carrying signatures and block arguments within that subset.
-4. Add `tensorium-opt` and register the dialect and conversion pass.
-5. Change the CodeGen memory helpers to emit Tensorium operations; preserve
-   control-flow generation. Make the compatibility pipeline explicit in tests
-   and distinguish raw generated IR from lowered output.
-6. Run the existing tests and compare native behavior, including the `for`
-   regression suite. Validate builds with MLIR enabled and disabled.
+4. `tensorium-opt` registers the dialect, compatibility pass and standard
+   canonicalization/CSE passes.
+5. CodeGen memory helpers emit Tensorium operations; control-flow generation
+   is preserved. Tests distinguish raw generated IR from lowered output.
+6. Existing tests and native `for` behavior cover the new compatibility pipeline.
+   Builds with MLIR enabled and disabled must continue to pass.
 
 Extend to arrays and pointer arithmetic after this milestone. Define and
 implement MemProtect incrementally once the base memory semantics are tested.

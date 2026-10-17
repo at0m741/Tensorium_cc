@@ -1,0 +1,7 @@
+add_executable(tensorium_conversion_tests TensoriumToMemRefTests.cpp)
+target_link_libraries(tensorium_conversion_tests PRIVATE
+  tensorium_to_memref MLIRParser MLIRArithDialect
+  cc1_project_options cc1_warnings
+)
+add_test(NAME tensorium_to_memref COMMAND tensorium_conversion_tests)
+set_tests_properties(tensorium_to_memref PROPERTIES TIMEOUT 10)

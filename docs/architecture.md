@@ -84,10 +84,11 @@ retain their existing paths. AST tests cover destruction and conversions that
 outlive Parser/Sema; frontend tests cover retained ASTs and stream output;
 CodeGen tests cover parameter storage across nested control flow.
 
-The planned reusable MLIR backend has a separate `include/tensorium` and
-`lib/tensorium` boundary. See [Tensorium MLIR backend architecture](mlir_backend.md)
-for dialect, transformation, conversion, pipeline and runtime responsibilities.
-These planned components are not yet implemented.
+The reusable MLIR backend has a separate `include/tensorium` and `lib/tensorium`
+boundary. CodeGen emits Tensorium pointers and memory operations; `tensorium-opt`
+can convert scalar storage to MemRef independently of the C frontend. See
+[Tensorium MLIR backend architecture](mlir_backend.md) for implemented dialect
+and conversion components and the planned protection pipeline and runtime.
 
 When changing a boundary, validate builds with `CC1_ENABLE_MLIR=OFF` and `ON`.
 Ownership changes should also be checked with AddressSanitizer and

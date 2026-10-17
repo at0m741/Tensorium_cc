@@ -97,20 +97,21 @@ option(CC1_ENABLE_MLIR "Enable MLIR code generation" OFF)
 if(CC1_ENABLE_MLIR)
   enable_language(C)
   find_package(MLIR REQUIRED CONFIG)
-	list(APPEND CMAKE_MODULE_PATH
-	  "${LLVM_CMAKE_DIR}"
-	  "${MLIR_CMAKE_DIR}"
-	)
+  list(APPEND CMAKE_MODULE_PATH
+    "${LLVM_CMAKE_DIR}"
+    "${MLIR_CMAKE_DIR}"
+  )
 
-	include(TableGen)
-	include(AddLLVM)
-	include(AddMLIR)
+  include(TableGen)
+  include(AddLLVM)
+  include(AddMLIR)
 
-	set(TENSORIUM_SOURCE_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
-	set(TENSORIUM_BINARY_INCLUDE_DIR "${PROJECT_BINARY_DIR}/include")
+  set(TENSORIUM_SOURCE_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
+  set(TENSORIUM_BINARY_INCLUDE_DIR "${PROJECT_BINARY_DIR}/include")
 
-	add_subdirectory(include/tensorium)
-	add_subdirectory(lib/tensorium)
+  add_subdirectory(include/tensorium)
+  add_subdirectory(lib/tensorium)
+  add_subdirectory(tools/tensorium-opt)
   cc1_add_module(cc1_codegen
     lib/CodeGen/MLIRGen.cpp
     lib/CodeGen/MLIRGenTypes.cpp
@@ -132,7 +133,7 @@ if(CC1_ENABLE_MLIR)
     MLIRIR
     MLIRArithDialect
     MLIRFuncDialect
-    MLIRMemRefDialect
+    tensorium_ir
     MLIRControlFlowDialect
   )
 

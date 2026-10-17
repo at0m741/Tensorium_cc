@@ -40,8 +40,12 @@ if(MLIR_ENABLED)
   endif()
 
   run_case(0 --emit-mlir locals.c)
-  if(NOT "${OUTPUT}" MATCHES "memref.alloca" OR NOT "${OUTPUT}" MATCHES "memref.store" OR NOT "${OUTPUT}" MATCHES "memref.load" OR NOT "${OUTPUT}" MATCHES "(func\\.)?call @add" OR NOT "${DIAGNOSTIC}" STREQUAL "")
+  if(NOT "${OUTPUT}" MATCHES "tensorium.alloca" OR NOT "${OUTPUT}" MATCHES "tensorium.store" OR NOT "${OUTPUT}" MATCHES "tensorium.load" OR NOT "${OUTPUT}" MATCHES "(func\\.)?call @add" OR NOT "${DIAGNOSTIC}" STREQUAL "")
     message(FATAL_ERROR "Incorrect local storage or call MLIR:\n${OUTPUT}\n${DIAGNOSTIC}")
+  endif()
+
+  if("${OUTPUT}" MATCHES "memref\\.")
+    message(FATAL_ERROR "Raw MLIR unexpectedly contains memref operations:\n${OUTPUT}")
   endif()
 
   file(WRITE "${SCRATCH_DIR}/unsupported.c" "int f(int x) { return x / 2; }\n")

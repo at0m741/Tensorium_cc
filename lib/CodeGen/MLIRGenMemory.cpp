@@ -1,13 +1,15 @@
 #include "cc1/CodeGen/MLIRGen.hpp"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
 
 Address MLIRGen::createScalarStorage(mlir::Type type, const Type &objectType) {
 #if LLVM_VERSION_MAJOR >= 22
-  auto allocation = mlir::memref::AllocaOp::create(
-      builder, builder.getUnknownLoc(), mlir::MemRefType::get({}, type));
+  auto allocation = tensorium::AllocaOp::create(
+      builder, builder.getUnknownLoc(),
+      tensorium::PtrType::get(builder.getContext(), type));
 #else
-  auto allocation = builder.create<mlir::memref::AllocaOp>(
-      builder.getUnknownLoc(), mlir::MemRefType::get({}, type));
+  auto allocation = builder.create<tensorium::AllocaOp>(
+      builder.getUnknownLoc(),
+      tensorium::PtrType::get(builder.getContext(), type));
 #endif
 
   return {allocation.getResult(), type, &objectType};
@@ -40,24 +42,24 @@ Address MLIRGen::emitLValue(const Expr &expr) {
 
 mlir::Value MLIRGen::emitLoad(Address address) {
 #if LLVM_VERSION_MAJOR >= 22
-  return mlir::memref::LoadOp::create(builder, builder.getUnknownLoc(),
-                                      address.base, mlir::ValueRange{})
+  return tensorium::LoadOp::create(builder, builder.getUnknownLoc(),
+                                   address.elementType, address.base)
       .getResult();
 #else
   return builder
-      .create<mlir::memref::LoadOp>(builder.getUnknownLoc(), address.base,
-                                    mlir::ValueRange{})
+      .create<tensorium::LoadOp>(builder.getUnknownLoc(), address.elementType,
+                                 address.base)
       .getResult();
 #endif
 }
 
 void MLIRGen::emitStore(mlir::Value value, Address address) {
 #if LLVM_VERSION_MAJOR >= 22
-  mlir::memref::StoreOp::create(builder, builder.getUnknownLoc(), value,
-                                address.base, mlir::ValueRange{});
+  tensorium::StoreOp::create(builder, builder.getUnknownLoc(), value,
+                             address.base);
 #else
-  builder.create<mlir::memref::StoreOp>(builder.getUnknownLoc(), value,
-                                        address.base, mlir::ValueRange{});
+  builder.create<tensorium::StoreOp>(builder.getUnknownLoc(), value,
+                                     address.base);
 #endif
 }
 

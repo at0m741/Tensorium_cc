@@ -13,10 +13,17 @@ function(run_step)
   set(OUTPUT "${OUTPUT}" PARENT_SCOPE)
 endfunction()
 
-run_step("${CC1}" -fno-color-diagnostics --emit-mlir "${SOURCE}")
+if(INPUT_IS_MLIR)
+  file(READ "${SOURCE}" OUTPUT)
+else()
+  run_step("${CC1}" -fno-color-diagnostics --emit-mlir "${SOURCE}")
+endif()
 file(WRITE "${SCRATCH_DIR}/for.mlir" "${OUTPUT}")
 
-run_step("${MLIR_OPT}" "${SCRATCH_DIR}/for.mlir"
+run_step("${TENSORIUM_OPT}" "${SCRATCH_DIR}/for.mlir"
+  --convert-tensorium-to-memref -o "${SCRATCH_DIR}/for-memref.mlir")
+
+run_step("${MLIR_OPT}" "${SCRATCH_DIR}/for-memref.mlir"
   --convert-arith-to-llvm --convert-cf-to-llvm --convert-func-to-llvm
   --finalize-memref-to-llvm --reconcile-unrealized-casts
   -o "${SCRATCH_DIR}/for-llvm.mlir")
