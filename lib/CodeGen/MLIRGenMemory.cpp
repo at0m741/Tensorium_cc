@@ -16,9 +16,42 @@ Address MLIRGen::createScalarStorage(mlir::Type type, const Type &objectType) {
 }
 
 Address MLIRGen::emitLValue(const Expr &expr) {
+  if (auto *unary = dynamic_cast<const UnaryExpr *>(&expr)) {
+    if (unary->op == UnaryOp::DEREF) {
+      mlir::Value pointer = emitExpr(*unary->operand);
+      if (!pointer)
+        return {};
+
+      auto pointerType = mlir::dyn_cast<tensorium::PtrType>(pointer.getType());
+
+      if (!pointerType || !expr.type) {
+        diag.error(expr.loc,
+                   "MLIR dereference requires a typed Tensorium pointer");
+        return {};
+      }
+
+      mlir::Type objectType = lowerType(*expr.type, expr.loc);
+      if (!objectType)
+        return {};
+
+      if (pointerType.getPointeeType() != objectType) {
+        diag.error(expr.loc, "MLIR dereference type does not match the AST");
+        return {};
+      }
+
+      return {pointer, objectType, expr.type};
+    }
+  }
+
   auto *reference = dynamic_cast<const IdentExpr *>(&expr);
   if (!reference || !reference->decl) {
-    diag.error(expr.loc, "MLIR assignment requires a scalar variable");
+    diag.error(expr.loc,
+               "MLIR lvalue requires a scalar variable or dereference");
+    return {};
+  }
+
+  if (reference->decl->type->isPointer()) {
+    diag.error(expr.loc, "MLIR pointer-valued storage is not supported yet");
     return {};
   }
 
@@ -43,12 +76,12 @@ Address MLIRGen::emitLValue(const Expr &expr) {
 mlir::Value MLIRGen::emitLoad(Address address) {
 #if LLVM_VERSION_MAJOR >= 22
   return tensorium::LoadOp::create(builder, builder.getUnknownLoc(),
-                                   address.elementType, address.base)
+                                  address.elementType, address.base)
       .getResult();
 #else
   return builder
       .create<tensorium::LoadOp>(builder.getUnknownLoc(), address.elementType,
-                                 address.base)
+                                address.base)
       .getResult();
 #endif
 }
@@ -59,12 +92,16 @@ void MLIRGen::emitStore(mlir::Value value, Address address) {
                              address.base);
 #else
   builder.create<tensorium::StoreOp>(builder.getUnknownLoc(), value,
-                                     address.base);
+                                   address.base);
 #endif
 }
 
 void MLIRGen::materializeParameters() {
   for (const auto &binding : values) {
+    // Pointer parameters remain SSA values for this first milestone.
+    if (binding.first->type->isPointer())
+      continue;
+
     if (storage.find(binding.first) != storage.end())
       continue;
 

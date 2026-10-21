@@ -591,7 +591,6 @@ void rejects_unsupported_constructs() {
        "does not support this binary operator"},
       {"int f(int n) { for (; n; n += 1) {} return n; }",
        "does not support this binary operator"},
-      {"int f(int *p) { return *p; }", "does not support type 'int*'"},
       {"int global;", "not implemented for this declaration"},
       {"int f(void) { static int x; return x; }",
        "automatic scalar local storage"},

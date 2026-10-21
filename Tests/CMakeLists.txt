@@ -217,4 +217,6 @@ if(CC1_ENABLE_MLIR)
     )
     set_tests_properties(tensorium_memory_runtime PROPERTIES TIMEOUT 30)
   endif()
+
+  add_subdirectory(CodeGen/Memory)
 endif()

@@ -19,6 +19,11 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
                              "automatic scalar local storage");
         return mlir::failure();
       }
+      if (var->type->isPointer()) {
+        diag.error(var->loc,
+                   "MLIR pointer-valued storage is not supported yet");
+        return mlir::failure();
+      }
       mlir::Type type = lowerType(*var->type, var->loc);
       if (!type)
         return mlir::failure();

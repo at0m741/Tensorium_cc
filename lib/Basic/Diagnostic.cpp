@@ -17,17 +17,12 @@ bool useColor(std::ostream &output, DiagnosticColor mode) {
   if ((noColor && *noColor) || (term && std::string(term) == "dumb"))
     return false;
 
-#ifdef _WIN32
-  // ANSI escape support is not guaranteed for Windows console streams.
-  return false;
-#else
   int fd = -1;
   if (&output == &std::cerr)
     fd = 2;
   else if (&output == &std::cout)
     fd = 1;
   return fd >= 0 && isatty(fd);
-#endif
 }
 
 const char *levelName(DiagnosticLevel level) {

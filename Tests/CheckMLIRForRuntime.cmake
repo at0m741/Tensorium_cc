@@ -31,9 +31,12 @@ run_step("${MLIR_TRANSLATE}" --mlir-to-llvmir
   "${SCRATCH_DIR}/for-llvm.mlir" -o "${SCRATCH_DIR}/for.ll")
 
 # Repeat at both optimization levels so correctness does not rely on cleanup.
+set(CLANG_INPUTS "${SCRATCH_DIR}/for.ll")
+if(DEFINED RUNNER AND NOT "${RUNNER}" STREQUAL "")
+  list(APPEND CLANG_INPUTS "${RUNNER}")
+endif()
 foreach(LEVEL IN ITEMS 0 2)
   set(EXECUTABLE "${SCRATCH_DIR}/for-O${LEVEL}${CMAKE_EXECUTABLE_SUFFIX}")
-  run_step("${CLANG}" "-O${LEVEL}" "${SCRATCH_DIR}/for.ll" "${RUNNER}"
-    -o "${EXECUTABLE}")
+  run_step("${CLANG}" "-O${LEVEL}" ${CLANG_INPUTS} -o "${EXECUTABLE}")
   run_step("${EXECUTABLE}")
 endforeach()

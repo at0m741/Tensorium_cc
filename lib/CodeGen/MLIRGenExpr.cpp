@@ -1,6 +1,7 @@
+#include "cc1/AST/AST.hpp"
 #include "cc1/CodeGen/MLIRGen.hpp"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "tensorium/Dialect/Tensorium/IR/TensoriumTypes.h"
 #include "llvm/ADT/SmallVector.h"
 
 mlir::Value MLIRGen::emitExpr(const Expr &expr) {
@@ -44,6 +45,18 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
     return it->second;
   }
 
+  if (auto *unary = dynamic_cast<const UnaryExpr *>(&expr)) {
+    if (unary->op == UnaryOp::ADDR) {
+      Address address = emitLValue(*unary->operand);
+      return address ? address.base : mlir::Value{};
+    }
+
+    if (unary->op == UnaryOp::DEREF) {
+      Address address = emitLValue(expr);
+      return address ? emitLoad(address) : mlir::Value{};
+    }
+  }
+
   if (auto *cast = dynamic_cast<const ImplicitCastExpr *>(&expr)) {
     if (!cast->operand || !cast->operand->type || !cast->type) {
       diag.error(cast->loc, "untyped implicit conversion in MLIR generation");
@@ -52,6 +65,23 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
     if (cast->kind == ImplicitCastKind::LValueToRValue)
       return emitExpr(*cast->operand);
 
+    if (cast->kind == ImplicitCastKind::Pointer) {
+      mlir::Value value = emitExpr(*cast->operand);
+      if (!value)
+        return {};
+
+      mlir::Type destination = lowerType(*cast->type, cast->loc);
+      if (!destination)
+        return {};
+
+      if (!mlir::isa<tensorium::PtrType>(value.getType()) ||
+          value.getType() != destination) {
+        diag.error(cast->loc,
+                   "MLIR pointer conversion requires matching pointee types");
+        return {};
+      }
+      return value;
+    }
     if (cast->kind == ImplicitCastKind::Arithmetic &&
         cast->operand->type->isIntegral() && cast->type->isIntegral()) {
       mlir::Value value = emitExpr(*cast->operand);
