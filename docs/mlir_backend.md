@@ -1,16 +1,17 @@
 # Tensorium MLIR backend architecture
 
-The Tensorium dialect, scalar Tensorium-to-MemRef conversion and `tensorium-opt`
-are implemented. `cc1_codegen` emits `tensorium.alloca`, `tensorium.load` and
-`tensorium.store` with `!tensorium.ptr<T>`, alongside `arith`, `cf` and `func`.
-MemProtect, direct LLVM lowering, dedicated pipeline libraries and the runtime
+The Tensorium dialect, scalar Tensorium-to-MemRef compatibility conversion,
+direct Tensorium-to-LLVM conversion and `tensorium-opt` are implemented.
+`cc1_codegen` emits typed object memory, fixed-size array objects, pointer
+derivation, nulls, comparisons and differences, alongside `arith`, `cf` and
+`func`. MemProtect, dedicated pipeline libraries and the protection runtime
 described below remain planned components.
 
-`--emit-mlir` prints raw Tensorium IR. Run
-`tensorium-opt --convert-tensorium-to-memref` before passing it to the stock
-`mlir-opt`. Native regression tests perform this conversion explicitly, then
-lower standard operations to LLVM and run the generated program at `-O0` and
-`-O2`. Dialect and conversion tests are permanent CTest targets.
+`--emit-mlir` prints raw Tensorium IR with target layout and triple attributes.
+`tensorium-opt --convert-tensorium-to-llvm` lowers supported C memory and
+`arith/cf/func` directly to the LLVM dialect. The MemRef conversion remains
+available for its scalar subset. Native tests exercise both paths and execute
+generated programs at `-O0` and `-O2`. See [C memory support](memory.md).
 
 ## Module boundaries
 
@@ -80,7 +81,7 @@ directory, never in the source tree.
 | Pipelines | Pass order, options and registration | Transform and conversion libraries |
 | MemProtect runtime | Executable protection support through a defined C ABI | Platform facilities; no frontend or MLIR dependency |
 
-Use separate CMake targets: `tensorium_ir` and `tensorium_to_memref` currently
+Use separate CMake targets: `tensorium_ir`, `tensorium_to_llvm` and `tensorium_to_memref` currently
 exist; add `memprotect_ir`, transform and further conversion targets as their
 implementations arrive. A future `tensorium_pipelines` composes these targets;
 `tensorium-opt` links the registered dialects, passes and MLIR optimizer support.
@@ -90,10 +91,11 @@ The runtime gets an independent build option and target.
 ## IR and conversion contracts
 
 The `tensorium` dialect has typed pointers, for example `!tensorium.ptr<i32>`,
-together with local allocation, load and store operations.
-Retain the existing `arith`, `cf` and `func` operations for arithmetic, branches
-and functions. Add pointer offsets, casts and explicit lifetime operations as
-their semantics and frontend support are implemented.
+and fixed-size array objects such as `!tensorium.array<4, i32>`, together with
+local allocation, load, store, pointer offsets, array decay, null pointers,
+pointer comparisons and element differences. Arithmetic, branches and functions
+use `arith`, `cf` and `func`. General pointer casts and explicit lifetime
+operations remain future work.
 
 Specify allocation extent, alignment, object identity, pointer derivation and
 access width before defining operations. Record the target layout in the module;
@@ -135,10 +137,11 @@ checked C AST
 the selected pipeline. `CompilerInstance` coordinates frontend execution and
 output actions; it does not implement dialect transformations.
 
-The first Tensorium-to-MemRef conversion preserves the existing scalar storage
-behavior and native test pipeline. It is a migration stage, not a specification
-for general C pointers or memory protection. A later direct Tensorium-to-LLVM
-conversion can provide an explicitly selected unprotected pipeline.
+The Tensorium-to-MemRef conversion preserves the original scalar storage
+behavior. It is a compatibility stage, not a specification for general C
+pointers or memory protection. The implemented Tensorium-to-LLVM conversion
+provides the explicitly selected unprotected path for stored pointers, arrays
+and ordinary external pointer ABIs.
 
 The implemented compatibility conversion maps pointers to integer/float objects
 to rank-zero memrefs. It converts internal function signatures, direct calls,
@@ -178,5 +181,6 @@ contract, tests and the remaining structured-loop and memory integration work.
 6. Existing tests and native `for` behavior cover the new compatibility pipeline.
    Builds with MLIR enabled and disabled must continue to pass.
 
-Extend to arrays and pointer arithmetic after this milestone. Define and
-implement MemProtect incrementally once the base memory semantics are tested.
+Fixed-size arrays and pointer arithmetic are implemented by the subsequent C
+memory milestone described in [memory.md](memory.md). Define and implement
+MemProtect incrementally once the required base memory semantics are tested.

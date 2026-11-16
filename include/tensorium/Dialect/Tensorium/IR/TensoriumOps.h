@@ -1,4 +1,5 @@
 #pragma once
+#include "mlir/Bytecode/BytecodeOpInterface.h"
 
 #include "tensorium/Dialect/Tensorium/IR/TensoriumTypes.h"
 

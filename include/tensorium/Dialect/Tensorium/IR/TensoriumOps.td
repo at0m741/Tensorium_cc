@@ -90,4 +90,52 @@ def Tensorium_StoreOp : Tensorium_Op<"store", [
       "$value `,` $address attr-dict `:` type($address)";
 }
 
+def Tensorium_PtrOffsetOp : Tensorium_Op<"ptr_offset", [Pure,
+  TypesMatchWith<"result matches the base pointer", "base", "result", "$_self">
+]> {
+  let summary = "Offset a pointer by a signed number of pointee objects";
+  let description = [{
+    Derives a pointer using the target's allocation stride of the pointee type.
+    The offset is a signed integer. No memory is read and no bounds check is
+    implied. C generation supplies offsets extended to the target pointer width.
+  }];
+  let arguments = (ins Tensorium_PtrType:$base, AnySignlessInteger:$offset);
+  let results = (outs Tensorium_PtrType:$result);
+  let assemblyFormat = "$base `[` $offset `]` attr-dict `:` type($base) `,` type($offset)";
+}
+
+def Tensorium_ArrayDecayOp : Tensorium_Op<"array_decay", [Pure]> {
+  let summary = "Derive a pointer to an array object's first element";
+  let arguments = (ins Tensorium_PtrType:$base);
+  let results = (outs Tensorium_PtrType:$result);
+  let assemblyFormat = "$base attr-dict `:` type($base) `->` type($result)";
+  let hasVerifier = 1;
+}
+
+def Tensorium_NullOp : Tensorium_Op<"null", [Pure]> {
+  let summary = "Produce a null pointer of a specified pointee type";
+  let results = (outs Tensorium_PtrType:$result);
+  let assemblyFormat = "attr-dict `:` type($result)";
+}
+
+def Tensorium_PtrCmpOp : Tensorium_Op<"ptr_cmp", [Pure, SameTypeOperands]> {
+  let summary = "Compare pointers using eq, ne, ult, ule, ugt or uge";
+  let arguments = (ins StrAttr:$predicate, Tensorium_PtrType:$lhs,
+                       Tensorium_PtrType:$rhs);
+  let results = (outs I1:$result);
+  let assemblyFormat = "$predicate $lhs `,` $rhs attr-dict `:` type($lhs)";
+  let hasVerifier = 1;
+}
+
+def Tensorium_PtrDiffOp : Tensorium_Op<"ptr_diff", [Pure, SameTypeOperands]> {
+  let summary = "Compute a signed pointer difference in pointee elements";
+  let description = [{
+    Both pointers must belong to the same array object (or its one-past address).
+    The result must be representable in the signed result integer type.
+  }];
+  let arguments = (ins Tensorium_PtrType:$lhs, Tensorium_PtrType:$rhs);
+  let results = (outs AnySignlessInteger:$result);
+  let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($lhs) `->` type($result)";
+}
+
 #endif

@@ -17,6 +17,8 @@ function(cc1_add_memory_program fixture)
         -DMLIR_OPT=${CC1_MLIR_OPT}
         -DMLIR_TRANSLATE=${CC1_MLIR_TRANSLATE}
         -DCLANG=${CC1_RUNTIME_CLANG}
+        -DUSE_LLVM_MEMORY=ON
+        -DRUNNER=${ARGN}
         -DSOURCE=${SOURCE}
         -DSCRATCH_DIR=${CMAKE_CURRENT_BINARY_DIR}/${fixture}-runtime
         -P ${PROJECT_SOURCE_DIR}/Tests/CheckMLIRForRuntime.cmake
@@ -38,14 +40,16 @@ function(cc1_add_memory_rejection fixture diagnostic)
 endfunction()
 
 foreach(FIXTURE IN ITEMS address_dereference pointer_aliasing pointer_control_flow
-                         pointer_parameters pointer_short)
+                         pointer_parameters pointer_short local_pointer
+                         pointer_assignment pointer_address nested_pointer
+                         pointer_rebinding pointer_arithmetic pointer_array
+                         multidimensional_array pointer_null pointer_updates
+                         address_dereference2 pointer_compound)
   cc1_add_memory_program(${FIXTURE})
 endforeach()
 
-cc1_add_memory_rejection(local_pointer "pointer-valued storage is not supported yet")
-cc1_add_memory_rejection(pointer_assignment "pointer-valued storage is not supported yet")
-cc1_add_memory_rejection(pointer_address "pointer-valued storage is not supported yet")
-cc1_add_memory_rejection(nested_pointer "only pointers to arithmetic objects")
-cc1_add_memory_rejection(void_pointer "only pointers to arithmetic objects")
+cc1_add_memory_program(pointer_external ${CMAKE_CURRENT_SOURCE_DIR}/PointerExternalRuntime.c)
+
+cc1_add_memory_rejection(void_pointer "only pointers to supported object types")
 cc1_add_memory_rejection(volatile_pointee "volatile pointees")
 cc1_add_memory_rejection(const_write "assignment requires a modifiable lvalue")

@@ -1,12 +1,24 @@
 #include "cc1/CodeGen/MLIRGen.hpp"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
+#include "tensorium/Support/Builders.h"
 #include <mlir/Support/LLVM.h>
 
 mlir::Value MLIRGen::emitCondition(const Expr &expr) {
   mlir::Value value = emitExpr(expr);
   if (!value)
     return {};
+
+  if (mlir::isa<tensorium::PtrType>(value.getType())) {
+    auto loc = builder.getUnknownLoc();
+    auto zero =
+        tensorium::createOp<tensorium::NullOp>(builder, loc, value.getType());
+    return tensorium::createOp<tensorium::PtrCmpOp>(
+               builder, loc, builder.getI1Type(), builder.getStringAttr("ne"),
+               value, zero.getResult())
+        .getResult();
+  }
 
   auto type = mlir::dyn_cast<mlir::IntegerType>(value.getType());
   if (!type) {

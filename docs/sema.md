@@ -75,10 +75,12 @@ the checked AST remains valid. `CompilerInstance` owns the context and source
 buffers for a complete invocation.
 
 The AST and semantic analysis modules have no LLVM/MLIR dependency. The optional
-backend consumes checked scalar function
-signatures, parameters, expressions, calls and returns. The current backend uses
-scalar `memref` storage for automatic locals and modified parameters; globals and
-address-taking still need additional storage and pointer support.
+backend consumes checked function signatures, parameters, expressions, calls
+and returns. It emits Tensorium object storage for automatic locals, modified
+parameters, nested pointers and fixed-size arrays, including address-taking.
+The direct LLVM conversion implements ordinary pointer ABIs; a separate MemRef
+compatibility conversion retains the original scalar subset. Global storage
+generation remains unsupported. See [C memory support](memory.md).
 
 ## Boundaries of this first stage
 

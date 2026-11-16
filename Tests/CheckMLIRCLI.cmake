@@ -30,7 +30,10 @@ endforeach()
 if(MLIR_ENABLED)
   run_case(0 --emit-mlir empty.c)
   string(STRIP "${OUTPUT}" MODULE)
-  if(NOT "${MODULE}" MATCHES "^module \\{[ \t\r\n]*\\}$" OR NOT "${DIAGNOSTIC}" STREQUAL "")
+  if(NOT "${MODULE}" MATCHES "^module attributes \\{[^}]*\\} \\{[ \t\r\n]*\\}$" OR
+     NOT "${MODULE}" MATCHES "llvm.data_layout" OR
+     NOT "${MODULE}" MATCHES "llvm.target_triple" OR
+     NOT "${DIAGNOSTIC}" STREQUAL "")
     message(FATAL_ERROR "Incorrect empty MLIR module:\n${OUTPUT}\n${DIAGNOSTIC}")
   endif()
 

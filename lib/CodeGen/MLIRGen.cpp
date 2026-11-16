@@ -17,6 +17,10 @@ mlir::OwningOpRef<mlir::ModuleOp>
 MLIRGen::generate(const TranslationUnit &unit) {
   mlir::OwningOpRef<mlir::ModuleOp> module(
       mlir::ModuleOp::create(builder.getUnknownLoc()));
+  module->getOperation()->setAttr("llvm.data_layout",
+                                  builder.getStringAttr(target.datalayout));
+  module->getOperation()->setAttr("llvm.target_triple",
+                                  builder.getStringAttr(target.triple));
 
   functions.clear();
   values.clear();

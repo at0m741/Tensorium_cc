@@ -3,3 +3,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(Dialect/Tensorium/IR)
 add_subdirectory(Conversion/TensoriumToMemRef)
+add_subdirectory(Conversion/TensoriumToLLVM)

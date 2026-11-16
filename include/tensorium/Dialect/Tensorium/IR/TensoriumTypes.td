@@ -23,4 +23,17 @@ def Tensorium_PtrType : TypeDef<Tensorium_Dialect, "Ptr"> {
   let genVerifyDecl = 1;
 }
 
+def Tensorium_ArrayType : TypeDef<Tensorium_Dialect, "Array"> {
+  let mnemonic = "array";
+  let summary = "Fixed-size contiguous array object";
+  let description = [{
+    An object containing size consecutive elements. This describes memory
+    storage, not an SSA tensor value. Arrays can contain other arrays or typed
+    pointers. Size, element stride and ABI alignment follow the target layout.
+  }];
+  let parameters = (ins "uint64_t":$size, "::mlir::Type":$elementType);
+  let assemblyFormat = "`<` $size `,` $elementType `>`";
+  let genVerifyDecl = 1;
+}
+
 #endif

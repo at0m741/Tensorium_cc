@@ -1,10 +1,80 @@
 #include "cc1/AST/AST.hpp"
 #include "cc1/CodeGen/MLIRGen.hpp"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
 #include "tensorium/Dialect/Tensorium/IR/TensoriumTypes.h"
+#include "tensorium/Support/Builders.h"
 #include "llvm/ADT/SmallVector.h"
+#include <limits>
+#include <optional>
+
+namespace {
+std::optional<uint64_t> objectSize(const Type &type, const TargetInfo &target) {
+  switch (type.kind) {
+  case Type::BOOL:
+  case Type::CHAR:
+  case Type::SCHAR:
+  case Type::UCHAR:
+    return 1;
+  case Type::SHORT:
+  case Type::USHORT:
+    return target.sizeofShort;
+  case Type::INT:
+  case Type::UINT:
+    return target.sizeofInt;
+  case Type::LONG:
+  case Type::ULONG:
+    return target.sizeofLong;
+  case Type::LONGLONG:
+  case Type::ULONGLONG:
+    return target.sizeofLonglong;
+  case Type::FLOAT:
+    return target.sizeofFloat;
+  case Type::DOUBLE:
+    return target.sizeofDouble;
+  case Type::POINTER:
+    return target.sizeofPointer;
+  case Type::ARRAY: {
+    if (!type.elemType || type.arraySize <= 0)
+      return std::nullopt;
+    auto element = objectSize(*type.elemType, target);
+    if (!element ||
+        *element > std::numeric_limits<uint64_t>::max() / type.arraySize)
+      return std::nullopt;
+    return *element * type.arraySize;
+  }
+  default:
+    return std::nullopt;
+  }
+}
+} // namespace
 
 mlir::Value MLIRGen::emitExpr(const Expr &expr) {
+  using tensorium::createOp;
+  if (expr.type && expr.type->isArray() && expr.isLval) {
+    Address address = emitLValue(expr);
+    return address ? address.base : mlir::Value{};
+  }
+  if (auto *size = dynamic_cast<const SizeofExpr *>(&expr)) {
+    const Type *object = size->ofType ? size->operandType : size->expr->type;
+    auto type = lowerType(*expr.type, expr.loc);
+    auto bytes = objectSize(*object, target);
+    if (!type || !bytes ||
+        (target.sizeofPointer < 8 &&
+         *bytes >= (uint64_t{1} << (target.sizeofPointer * 8)))) {
+      diag.error(expr.loc,
+                 "MLIR sizeof requires a supported complete object type");
+      return {};
+    }
+    return createOp<mlir::arith::ConstantOp>(
+               builder, builder.getUnknownLoc(),
+               builder.getIntegerAttr(type, *bytes))
+        .getResult();
+  }
+  if (dynamic_cast<const IndexExpr *>(&expr)) {
+    Address address = emitLValue(expr);
+    return address ? emitLoad(address) : mlir::Value{};
+  }
   if (auto *literal = dynamic_cast<const IntLitExpr *>(&expr)) {
     if (literal->type && literal->type->isIntegral()) {
       mlir::Type type = lowerType(*literal->type, literal->loc);
@@ -46,6 +116,36 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
   }
 
   if (auto *unary = dynamic_cast<const UnaryExpr *>(&expr)) {
+    if (unary->op == UnaryOp::PRE_INC || unary->op == UnaryOp::PRE_DEC ||
+        unary->op == UnaryOp::POST_INC || unary->op == UnaryOp::POST_DEC)
+      return emitUpdate(*unary);
+    if (unary->op == UnaryOp::NOT) {
+      auto condition = emitCondition(*unary->operand);
+      if (!condition)
+        return {};
+      auto loc = builder.getUnknownLoc();
+      auto zero = createOp<mlir::arith::ConstantOp>(
+          builder, loc, builder.getIntegerAttr(builder.getI1Type(), 0));
+      auto inverted = createOp<mlir::arith::CmpIOp>(
+          builder, loc, mlir::arith::CmpIPredicate::eq, condition,
+          zero.getResult());
+      return createOp<mlir::arith::ExtUIOp>(builder, loc,
+                                            lowerType(*expr.type, expr.loc),
+                                            inverted.getResult())
+          .getResult();
+    }
+    if ((unary->op == UnaryOp::NEG || unary->op == UnaryOp::POS) &&
+        expr.type->isIntegral()) {
+      auto value = emitExpr(*unary->operand);
+      if (!value || unary->op == UnaryOp::POS)
+        return value;
+      auto loc = builder.getUnknownLoc();
+      auto zero = createOp<mlir::arith::ConstantOp>(
+          builder, loc, builder.getIntegerAttr(value.getType(), 0));
+      return createOp<mlir::arith::SubIOp>(builder, loc, zero.getResult(),
+                                           value)
+          .getResult();
+    }
     if (unary->op == UnaryOp::ADDR) {
       Address address = emitLValue(*unary->operand);
       return address ? address.base : mlir::Value{};
@@ -64,6 +164,23 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
     }
     if (cast->kind == ImplicitCastKind::LValueToRValue)
       return emitExpr(*cast->operand);
+
+    if (cast->kind == ImplicitCastKind::ArrayToPointer) {
+      Address array = emitLValue(*cast->operand);
+      auto type = lowerType(*cast->type, cast->loc);
+      if (!array || !type)
+        return {};
+      return createOp<tensorium::ArrayDecayOp>(builder, builder.getUnknownLoc(),
+                                               type, array.base)
+          .getResult();
+    }
+    if (cast->kind == ImplicitCastKind::NullToPointer) {
+      auto type = lowerType(*cast->type, cast->loc);
+      return type ? createOp<tensorium::NullOp>(builder,
+                                                builder.getUnknownLoc(), type)
+                        .getResult()
+                  : mlir::Value{};
+    }
 
     if (cast->kind == ImplicitCastKind::Pointer) {
       mlir::Value value = emitExpr(*cast->operand);
@@ -84,61 +201,9 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
     }
     if (cast->kind == ImplicitCastKind::Arithmetic &&
         cast->operand->type->isIntegral() && cast->type->isIntegral()) {
-      mlir::Value value = emitExpr(*cast->operand);
-      if (!value)
-        return {};
-      auto from = mlir::dyn_cast<mlir::IntegerType>(value.getType());
-      mlir::Type destination = lowerType(*cast->type, cast->loc);
-      if (!destination)
-        return {};
-      auto to = mlir::dyn_cast<mlir::IntegerType>(destination);
-      if (!from || !to) {
-        diag.error(cast->loc, "integer conversion requires integer MLIR types");
-        return {};
-      }
-      auto loc = builder.getUnknownLoc();
-      if (cast->type->kind == Type::BOOL) {
-#if LLVM_VERSION_MAJOR >= 22
-        auto zero = mlir::arith::ConstantIntOp::create(builder, loc, from, 0);
-#elif LLVM_VERSION_MAJOR == 21
-        auto zero = builder.create<mlir::arith::ConstantIntOp>(loc, from, 0);
-#else
-        auto zero = builder.create<mlir::arith::ConstantIntOp>(loc, 0, from);
-#endif
-#if LLVM_VERSION_MAJOR >= 22
-        return mlir::arith::CmpIOp::create(builder, loc,
-                                           mlir::arith::CmpIPredicate::ne,
-                                           value, zero.getResult())
-            .getResult();
-#else
-        return builder
-            .create<mlir::arith::CmpIOp>(loc, mlir::arith::CmpIPredicate::ne,
-                                         value, zero.getResult())
-            .getResult();
-#endif
-      }
-      if (from == to)
-        return value;
-      if (from.getWidth() > to.getWidth())
-#if LLVM_VERSION_MAJOR >= 22
-        return mlir::arith::TruncIOp::create(builder, loc, to, value)
-            .getResult();
-#else
-        return builder.create<mlir::arith::TruncIOp>(loc, to, value)
-            .getResult();
-#endif
-      if (cast->operand->type->isSigned())
-#if LLVM_VERSION_MAJOR >= 22
-        return mlir::arith::ExtSIOp::create(builder, loc, to, value)
-            .getResult();
-#else
-        return builder.create<mlir::arith::ExtSIOp>(loc, to, value).getResult();
-#endif
-#if LLVM_VERSION_MAJOR >= 22
-      return mlir::arith::ExtUIOp::create(builder, loc, to, value).getResult();
-#else
-      return builder.create<mlir::arith::ExtUIOp>(loc, to, value).getResult();
-#endif
+      return emitIntegerConversion(emitExpr(*cast->operand),
+                                   *cast->operand->type, *cast->type,
+                                   cast->loc);
     }
     diag.error(cast->loc,
                "MLIR generation does not support this implicit conversion yet");

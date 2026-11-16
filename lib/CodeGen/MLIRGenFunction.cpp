@@ -118,7 +118,8 @@ mlir::LogicalResult MLIRGen::emitCall(const CallExpr &call,
 
 mlir::LogicalResult MLIRGen::declareFunction(const FuncDecl &function) {
   if (function.type->variadic || (function.type->retType->kind != Type::INT &&
-                                  !function.type->retType->isVoid())) {
+                                  !function.type->retType->isVoid() &&
+                                  !function.type->retType->isPointer())) {
     diag.error(function.loc, "MLIR generation is not implemented "
                              "for this declaration yet");
     return mlir::failure();

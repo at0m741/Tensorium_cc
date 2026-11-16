@@ -20,13 +20,18 @@ else()
 endif()
 file(WRITE "${SCRATCH_DIR}/for.mlir" "${OUTPUT}")
 
-run_step("${TENSORIUM_OPT}" "${SCRATCH_DIR}/for.mlir"
-  --convert-tensorium-to-memref -o "${SCRATCH_DIR}/for-memref.mlir")
+if(USE_LLVM_MEMORY)
+  run_step("${TENSORIUM_OPT}" "${SCRATCH_DIR}/for.mlir"
+    --convert-tensorium-to-llvm -o "${SCRATCH_DIR}/for-llvm.mlir")
+else()
+  run_step("${TENSORIUM_OPT}" "${SCRATCH_DIR}/for.mlir"
+    --convert-tensorium-to-memref -o "${SCRATCH_DIR}/for-memref.mlir")
 
-run_step("${MLIR_OPT}" "${SCRATCH_DIR}/for-memref.mlir"
-  --convert-arith-to-llvm --convert-cf-to-llvm --convert-func-to-llvm
-  --finalize-memref-to-llvm --reconcile-unrealized-casts
-  -o "${SCRATCH_DIR}/for-llvm.mlir")
+  run_step("${MLIR_OPT}" "${SCRATCH_DIR}/for-memref.mlir"
+    --convert-arith-to-llvm --convert-cf-to-llvm --convert-func-to-llvm
+    --finalize-memref-to-llvm --reconcile-unrealized-casts
+    -o "${SCRATCH_DIR}/for-llvm.mlir")
+endif()
 run_step("${MLIR_TRANSLATE}" --mlir-to-llvmir
   "${SCRATCH_DIR}/for-llvm.mlir" -o "${SCRATCH_DIR}/for.ll")
 

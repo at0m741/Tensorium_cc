@@ -39,13 +39,18 @@ private:
   llvm::DenseMap<const Decl *, Address> storage;
   llvm::DenseMap<const Decl *, mlir::func::FuncOp> functions;
 
-  Address createScalarStorage(mlir::Type type, const Type &objectType);
+  Address createObjectStorage(mlir::Type type, const Type &objectType);
   Address emitLValue(const Expr &expr);
   mlir::Value emitLoad(Address address);
   void emitStore(mlir::Value value, Address address);
   void materializeParameters();
+  mlir::Value emitPointerOffset(mlir::Value base, const Expr &offset,
+                                bool subtract = false);
+  mlir::Value emitUpdate(const UnaryExpr &expr);
 
   mlir::Type lowerType(const ::Type &type, SourceLoc loc);
+  mlir::Value emitIntegerConversion(mlir::Value value, const Type &from,
+                                    const Type &to, SourceLoc loc);
   mlir::Value emitExpr(const Expr &expr);
   mlir::Value emitBinary(const BinaryExpr &binary);
 

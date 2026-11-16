@@ -12,22 +12,20 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
         insertionBlock->back().hasTrait<mlir::OpTrait::IsTerminator>())
       break;
     if (auto *var = dynamic_cast<const VarDecl *>(item)) {
-      if (var->isGlobal || var->type->isArray() ||
-          var->type->quals.isVolatile || var->sc == StorageClass::STATIC ||
-          var->sc == StorageClass::EXTERN) {
+      if (var->isGlobal || var->type->quals.isVolatile ||
+          var->sc == StorageClass::STATIC || var->sc == StorageClass::EXTERN) {
         diag.error(var->loc, "MLIR generation currently supports only "
                              "automatic scalar local storage");
         return mlir::failure();
       }
-      if (var->type->isPointer()) {
-        diag.error(var->loc,
-                   "MLIR pointer-valued storage is not supported yet");
+      if (var->type->isArray() && var->init) {
+        diag.error(var->loc, "MLIR array initialization is not supported yet");
         return mlir::failure();
       }
       mlir::Type type = lowerType(*var->type, var->loc);
       if (!type)
         return mlir::failure();
-      auto address = createScalarStorage(type, *var->type);
+      auto address = createObjectStorage(type, *var->type);
       storage[var] = address;
       if (var->init) {
         mlir::Value value = emitExpr(*var->init);

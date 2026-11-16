@@ -4,8 +4,9 @@ MOpt was imported from MLIRArchOpt revision `b1984d9`, including its 17 MLIR
 regression fixtures. The sources live in this repository and the build does not
 require a sibling MLIRArchOpt checkout. The original checkout is not modified.
 
-This milestone integrates analysis and planning. It does not add vectorization,
-unrolling, tiling, C pointer storage, or memory protection.
+The MOpt milestone integrates analysis and planning. It does not add
+vectorization, unrolling, tiling or memory protection. C pointer storage is now
+provided separately by the [C memory implementation](memory.md).
 
 ## Layout and dependencies
 
@@ -109,4 +110,5 @@ C pointers. Future Tensorium-aware analyses or a suitable structured-memory
 conversion are needed for that case.
 
 Target-aware analyses and transformations belong before final lowering to LLVM.
-Direct Tensorium-to-LLVM lowering and MemProtect remain separate planned work.
+Direct Tensorium-to-LLVM lowering is implemented for C object memory; MemProtect
+remains separate planned work.

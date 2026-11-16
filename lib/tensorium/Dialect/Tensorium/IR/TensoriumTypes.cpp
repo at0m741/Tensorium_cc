@@ -30,13 +30,30 @@ PtrType::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
     return mlir::failure();
   }
 
-  if (!llvm::isa<mlir::IntegerType, mlir::FloatType, PtrType>(pointeeType)) {
-    emitError() << "expected an integer, floating-point, or Tensorium pointer "
-                   "pointee type, but got "
-                << pointeeType;
+  if (!llvm::isa<mlir::IntegerType, mlir::FloatType, PtrType, ArrayType>(
+          pointeeType)) {
+    emitError()
+        << "expected an integer, floating-point, array, or Tensorium pointer "
+           "pointee type, but got "
+        << pointeeType;
     return mlir::failure();
   }
 
+  return mlir::success();
+}
+
+mlir::LogicalResult
+ArrayType::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
+                  uint64_t size, mlir::Type elementType) {
+  if (size == 0) {
+    emitError() << "array size must be positive";
+    return mlir::failure();
+  }
+  if (!llvm::isa_and_nonnull<mlir::IntegerType, mlir::FloatType, PtrType,
+                             ArrayType>(elementType)) {
+    emitError() << "expected a supported array element type";
+    return mlir::failure();
+  }
   return mlir::success();
 }
 

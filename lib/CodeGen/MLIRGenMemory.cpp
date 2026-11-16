@@ -1,7 +1,11 @@
 #include "cc1/CodeGen/MLIRGen.hpp"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
+#include "tensorium/Support/Builders.h"
 
-Address MLIRGen::createScalarStorage(mlir::Type type, const Type &objectType) {
+using tensorium::createOp;
+
+Address MLIRGen::createObjectStorage(mlir::Type type, const Type &objectType) {
 #if LLVM_VERSION_MAJOR >= 22
   auto allocation = tensorium::AllocaOp::create(
       builder, builder.getUnknownLoc(),
@@ -16,6 +20,21 @@ Address MLIRGen::createScalarStorage(mlir::Type type, const Type &objectType) {
 }
 
 Address MLIRGen::emitLValue(const Expr &expr) {
+  if (auto *index = dynamic_cast<const IndexExpr *>(&expr)) {
+    const Expr *pointer = index->base;
+    const Expr *offset = index->index;
+    if (pointer->type->isIntegral())
+      std::swap(pointer, offset);
+    mlir::Value base = emitExpr(*pointer);
+    if (!base)
+      return {};
+    mlir::Value address = emitPointerOffset(base, *offset);
+    if (!address)
+      return {};
+    return {address,
+            mlir::cast<tensorium::PtrType>(address.getType()).getPointeeType(),
+            expr.type};
+  }
   if (auto *unary = dynamic_cast<const UnaryExpr *>(&expr)) {
     if (unary->op == UnaryOp::DEREF) {
       mlir::Value pointer = emitExpr(*unary->operand);
@@ -46,12 +65,7 @@ Address MLIRGen::emitLValue(const Expr &expr) {
   auto *reference = dynamic_cast<const IdentExpr *>(&expr);
   if (!reference || !reference->decl) {
     diag.error(expr.loc,
-               "MLIR lvalue requires a scalar variable or dereference");
-    return {};
-  }
-
-  if (reference->decl->type->isPointer()) {
-    diag.error(expr.loc, "MLIR pointer-valued storage is not supported yet");
+               "MLIR lvalue requires a variable, index or dereference");
     return {};
   }
 
@@ -67,7 +81,7 @@ Address MLIRGen::emitLValue(const Expr &expr) {
   }
 
   auto address =
-      createScalarStorage(value->second.getType(), *reference->decl->type);
+      createObjectStorage(value->second.getType(), *reference->decl->type);
   emitStore(value->second, address);
   storage[reference->decl] = address;
   return address;
@@ -98,16 +112,81 @@ void MLIRGen::emitStore(mlir::Value value, Address address) {
 
 void MLIRGen::materializeParameters() {
   for (const auto &binding : values) {
-    // Pointer parameters remain SSA values for this first milestone.
-    if (binding.first->type->isPointer())
-      continue;
-
     if (storage.find(binding.first) != storage.end())
       continue;
 
     auto address =
-        createScalarStorage(binding.second.getType(), *binding.first->type);
+        createObjectStorage(binding.second.getType(), *binding.first->type);
     emitStore(binding.second, address);
     storage[binding.first] = address;
   }
+}
+
+mlir::Value MLIRGen::emitPointerOffset(mlir::Value base, const Expr &offset,
+                                       bool subtract) {
+  mlir::Value index = emitExpr(offset);
+  if (!index)
+    return {};
+  auto from = mlir::dyn_cast<mlir::IntegerType>(index.getType());
+  if (!mlir::isa<tensorium::PtrType>(base.getType()) || !from) {
+    diag.error(offset.loc,
+               "MLIR pointer offset requires a pointer and an integer");
+    return {};
+  }
+  auto to = builder.getIntegerType(target.sizeofPointer * 8);
+  auto loc = builder.getUnknownLoc();
+  if (from.getWidth() < to.getWidth()) {
+    index = offset.type->isSigned()
+                ? createOp<mlir::arith::ExtSIOp>(builder, loc, to, index)
+                      .getResult()
+                : createOp<mlir::arith::ExtUIOp>(builder, loc, to, index)
+                      .getResult();
+  } else if (from.getWidth() > to.getWidth()) {
+    index =
+        createOp<mlir::arith::TruncIOp>(builder, loc, to, index).getResult();
+  }
+  if (subtract) {
+    auto zero = createOp<mlir::arith::ConstantOp>(
+        builder, loc, builder.getIntegerAttr(to, 0));
+    index = createOp<mlir::arith::SubIOp>(builder, loc, zero.getResult(), index)
+                .getResult();
+  }
+  return createOp<tensorium::PtrOffsetOp>(builder, loc, base.getType(), base,
+                                          index)
+      .getResult();
+}
+
+mlir::Value MLIRGen::emitUpdate(const UnaryExpr &expr) {
+  Address address = emitLValue(*expr.operand);
+  if (!address)
+    return {};
+  mlir::Value old = emitLoad(address);
+  mlir::Value next;
+  auto loc = builder.getUnknownLoc();
+  const bool decrement =
+      expr.op == UnaryOp::PRE_DEC || expr.op == UnaryOp::POST_DEC;
+  if (expr.type->isPointer()) {
+    auto integer = builder.getIntegerType(target.sizeofPointer * 8);
+    auto one = createOp<mlir::arith::ConstantOp>(
+        builder, loc, builder.getIntegerAttr(integer, decrement ? -1 : 1));
+    next = createOp<tensorium::PtrOffsetOp>(builder, loc, old.getType(), old,
+                                            one.getResult())
+               .getResult();
+  } else if (expr.type->isIntegral() && expr.type->kind != Type::BOOL) {
+    auto one = createOp<mlir::arith::ConstantOp>(
+        builder, loc, builder.getIntegerAttr(old.getType(), 1));
+    next =
+        decrement
+            ? createOp<mlir::arith::SubIOp>(builder, loc, old, one.getResult())
+                  .getResult()
+            : createOp<mlir::arith::AddIOp>(builder, loc, old, one.getResult())
+                  .getResult();
+  } else {
+    diag.error(expr.loc,
+               "MLIR increment/decrement requires an integer or pointer");
+    return {};
+  }
+  emitStore(next, address);
+  return expr.op == UnaryOp::POST_INC || expr.op == UnaryOp::POST_DEC ? old
+                                                                      : next;
 }

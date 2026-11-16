@@ -1,31 +1,36 @@
-# Tests C de la memoire
+# C memory tests
 
-`valid/` contient des programmes C autonomes avec `main`. Chaque programme
-retourne zero si tous ses controles passent, et un code distinct pour chaque
-echec. Ils couvrent l'adressage et le dereferencement, l'aliasing, les branches
-et boucles, les parametres scalaires adresses, la lecture via `const` et les
-conversions lors des lectures/ecritures de `short`.
+CTest registers 18 C programs with `main` from `valid/`. They cover loads and stores,
+aliasing, local and nested pointers, reassignment in branches and loops,
+arrays, arrays of pointers, multidimensional arrays, signed offsets,
+element-based differences, increments, null pointers and unevaluated `sizeof`
+operands. Compound integer assignments check promotion, narrowing, result values
+and evaluation of the left-hand address exactly once.
 
-`invalid/` contient les constructions actuellement refusees : stockage local
-d'un pointeur, reassignment d'un parametre pointeur, adresse d'un parametre
-pointeur, pointeurs imbriques, `void *`, pointees `volatile`, ecriture via
-`const`. A part l'ecriture via `const`, ces restrictions viennent du backend
-actuel et concernent du C valide.
+`pointer_external.c` uses `PointerExternalRuntime.c`, compiled separately by
+Clang. Calls cross the boundary in both directions and check pointer arguments,
+pointer results and writes through `int **`.
 
-Avec `CC1_ENABLE_MLIR=ON`, CTest compile chaque fichier avec `cc1 --emit-mlir`
-et verifie le statut ainsi que les diagnostics attendus. Si les outils LLVM
-et Clang sont disponibles, les cas valides passent aussi par :
+`invalid/` retains the currently rejected cases: `void *`, volatile accesses
+and writes through `const`. Previous restrictions on pointer-valued storage
+are now covered by valid programs that execute as native code.
+
+CTest checks generation and diagnostics for every fixture. When LLVM tools
+and Clang are available, valid programs use this pipeline:
 
 ```text
-cc1 -> Tensorium -> memref -> LLVM dialect -> LLVM IR -> Clang -> execution
+cc1 -> Tensorium -> LLVM dialect -> LLVM IR -> Clang -> execution
 ```
 
-Chaque programme est execute avec `-O0` puis `-O2`. Les fichiers intermediaires
-restent dans le repertoire de build, sous `Tests/CodeGen/Memory/*-runtime/`.
-Le helper `Tests/CheckMLIRForRuntime.cmake` accepte un programme avec son propre
-`main`, ou un fichier de pilotage separe fourni par `RUNNER`.
+Each program executes at `-O0` and `-O2`. A nonzero exit code identifies the
+failed check. Intermediate files remain under `Tests/CodeGen/Memory/*-runtime/`
+in the build directory.
+
+The scalar tests in `Tests/Conversion/scalar_memory.mlir` continue to exercise
+the Tensorium -> MemRef -> LLVM compatibility path. The new conversion is also
+tested with 32-bit and 64-bit pointer layouts in `Tests/Conversion/LLVM/`.
 
 ```sh
 ctest --test-dir "$HOME/Developer/build/tensorium-llvm24" \
-  -R '^mlir_memory_' --output-on-failure
+  -R 'mlir_memory_|tensorium_to_llvm_' --output-on-failure
 ```

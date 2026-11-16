@@ -4,6 +4,7 @@ set_target_properties(tensorium-opt PROPERTIES
 )
 target_link_libraries(tensorium-opt PRIVATE
   tensorium_to_memref
+  tensorium_to_llvm
   MLIRMlirOptMain
   MLIRArithDialect
   MLIRControlFlowDialect

@@ -26,8 +26,18 @@ build-mlir/cc1 --emit-mlir Tests/function_body.c
 ```
 
 `--emit-mlir` emits Tensorium memory operations alongside `arith`, `cf` and
-`func`. Lower the scalar storage to standard `memref` operations before using
-the stock LLVM/MLIR tools:
+`func`. For C object memory, including stored pointers and fixed-size arrays,
+lower directly to LLVM using the target layout recorded by CC1:
+
+```sh
+build-mlir/cc1 --emit-mlir Tests/CodeGen/Memory/valid/pointer_arithmetic.c \
+  > /tmp/program.tensorium.mlir
+build-mlir/tensorium-opt /tmp/program.tensorium.mlir \
+  --convert-tensorium-to-llvm -o /tmp/program.llvm.mlir
+```
+
+The scalar compatibility conversion to standard `memref` operations remains
+available for the original subset:
 
 ```sh
 build-mlir/cc1 --emit-mlir Tests/For_stmt.c > /tmp/program.tensorium.mlir
@@ -36,8 +46,10 @@ build-mlir/tensorium-opt /tmp/program.tensorium.mlir \
 ```
 
 The compatibility conversion also handles scalar pointers in internal function
-signatures, calls, returns and CFG block arguments. Pointer-valued storage and
-external pointer ABIs require a later lowering and are rejected explicitly.
+signatures, calls, returns and CFG block arguments. It rejects pointer-valued
+storage and external pointer ABIs; the direct LLVM conversion supports these
+with ordinary native pointers. See [C memory support](docs/memory.md) for the
+supported subset, semantics and execution tests.
 
 MLIR builds also enable the optional MOpt analysis libraries and tool, imported
 from MLIRArchOpt. They analyze structured `scf.for` loops and indexed `memref`
