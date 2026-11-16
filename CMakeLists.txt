@@ -41,7 +41,6 @@ cc1_add_module(cc1_basic
   lib/Basic/SourceManager.cpp
   lib/Basic/TargetInfo.cpp
 )
-
 cc1_add_module(cc1_ast
   lib/AST/Type.cpp
   lib/AST/ASTDump.cpp
@@ -85,7 +84,6 @@ target_link_libraries(cc1_frontend
 add_executable(cc1
   tools/cc1/main.cpp
 )
-
 target_link_libraries(cc1
   PRIVATE
     cc1_frontend
@@ -105,7 +103,6 @@ if(CC1_ENABLE_MLIR)
   include(TableGen)
   include(AddLLVM)
   include(AddMLIR)
-
   set(TENSORIUM_SOURCE_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
   set(TENSORIUM_BINARY_INCLUDE_DIR "${PROJECT_BINARY_DIR}/include")
 
