@@ -153,6 +153,18 @@ Tests cover dialect parsing and verification, conversion legality and execution.
 The stock `mlir-opt` can consume output only after project operations have been
 lowered to the standard dialects it registers.
 
+## MOpt analyses
+
+The optional MOpt libraries live under `include/mopt` and `lib/mopt` and are
+independent of the frontend and Tensorium dialect. `tensorium-opt` registers
+their `mopt-analyze-loops` pass when `CC1_ENABLE_MOPT` is enabled. Analysis and
+planning return data; the reporting pass writes to stderr and preserves IR.
+
+These analyses currently consume `scf.for` and indexed MemRef accesses, whereas
+CC1 emits CFG loops. They are available for structured MLIR inputs but are not
+automatically applied to C output. See [MOpt integration](mopt.md) for the target
+contract, tests and the remaining structured-loop and memory integration work.
+
 ## Completed first implementation milestone
 
 1. Tensorium IR definitions, registration and the `tensorium_ir` target.

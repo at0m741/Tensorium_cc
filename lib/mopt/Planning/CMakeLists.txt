@@ -1,0 +1,2 @@
+mopt_add_library(mopt_planning VectorizationPlanner.cpp LoopReport.cpp)
+target_link_libraries(mopt_planning PUBLIC mopt_analysis)

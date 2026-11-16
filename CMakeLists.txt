@@ -91,6 +91,9 @@ target_link_libraries(cc1
     cc1_warnings
 )
 option(CC1_ENABLE_MLIR "Enable MLIR code generation" OFF)
+include(CMakeDependentOption)
+cmake_dependent_option(CC1_ENABLE_MOPT
+  "Enable MOpt target-aware MLIR analyses and tools" ON "CC1_ENABLE_MLIR" OFF)
 
 if(CC1_ENABLE_MLIR)
   enable_language(C)
@@ -108,6 +111,10 @@ if(CC1_ENABLE_MLIR)
 
   add_subdirectory(include/tensorium)
   add_subdirectory(lib/tensorium)
+  if(CC1_ENABLE_MOPT)
+    add_subdirectory(lib/mopt)
+    add_subdirectory(tools/mopt)
+  endif()
   add_subdirectory(tools/tensorium-opt)
   cc1_add_module(cc1_codegen
     lib/CodeGen/MLIRGen.cpp

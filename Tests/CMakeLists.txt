@@ -168,6 +168,9 @@ set_tests_properties(mlir_cli PROPERTIES TIMEOUT 10)
 if(CC1_ENABLE_MLIR)
   add_subdirectory(Dialect/Tensorium)
   add_subdirectory(Conversion)
+  if(CC1_ENABLE_MOPT)
+    add_subdirectory(MOpt)
+  endif()
 
   add_executable(cc1_mlir_tests CodeGen/MLIRGenTests.cpp)
   target_link_libraries(cc1_mlir_tests

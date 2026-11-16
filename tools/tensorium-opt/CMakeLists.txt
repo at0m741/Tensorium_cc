@@ -11,3 +11,7 @@ target_link_libraries(tensorium-opt PRIVATE
   MLIRMemRefDialect
   MLIRTransforms
 )
+if(CC1_ENABLE_MOPT)
+  target_link_libraries(tensorium-opt PRIVATE mopt_passes MLIRSCFDialect)
+  target_compile_definitions(tensorium-opt PRIVATE TENSORIUM_ENABLE_MOPT=1)
+endif()

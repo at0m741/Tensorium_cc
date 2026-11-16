@@ -39,6 +39,20 @@ The compatibility conversion also handles scalar pointers in internal function
 signatures, calls, returns and CFG block arguments. Pointer-valued storage and
 external pointer ABIs require a later lowering and are rejected explicitly.
 
+MLIR builds also enable the optional MOpt analysis libraries and tool, imported
+from MLIRArchOpt. They analyze structured `scf.for` loops and indexed `memref`
+accesses and produce target-aware vectorization plans; they do not transform IR.
+
+```sh
+build-mlir/mopt --dump-target-info Tests/MOpt/01_linear.mlir
+build-mlir/tensorium-opt Tests/MOpt/01_linear.mlir \
+  --mopt-analyze-loops='mcpu=generic' -o /tmp/analyzed.mlir
+```
+
+`tensorium-opt` writes MOpt reports to stderr and keeps stdout for MLIR. Disable
+this component with `-DCC1_ENABLE_MOPT=OFF`. See [MOpt integration](docs/mopt.md)
+for the library boundaries, regression tests and remaining C frontend work.
+
 Public headers live in `include/cc1`, implementations in `lib`, and the CLI in
 `tools/cc1`. Tests are grouped by component under `Tests`; existing C fixtures
 remain available at their original paths. See [the architecture](docs/architecture.md)
