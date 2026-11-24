@@ -117,6 +117,7 @@ if(CC1_ENABLE_MLIR)
   endif()
   add_subdirectory(tools/tensorium-opt)
   cc1_add_module(cc1_codegen
+    lib/CodeGen/LocalStorageAnalysis.cpp
     lib/CodeGen/MLIRGen.cpp
     lib/CodeGen/MLIRGenTypes.cpp
     lib/CodeGen/MLIRGenExpr.cpp

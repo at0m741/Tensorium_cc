@@ -173,11 +173,24 @@ if(CC1_ENABLE_MLIR)
   endif()
 
   add_executable(cc1_mlir_tests CodeGen/MLIRGenTests.cpp)
+  target_compile_definitions(cc1_mlir_tests
+    PRIVATE CC1_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}/Tests"
+  )
   target_link_libraries(cc1_mlir_tests
     PRIVATE cc1_codegen cc1_parse cc1_sema cc1_project_options cc1_warnings
   )
   add_test(NAME mlir_codegen COMMAND cc1_mlir_tests)
   set_tests_properties(mlir_codegen PROPERTIES TIMEOUT 10)
+
+  add_executable(cc1_local_storage_tests CodeGen/LocalStorageAnalysisTests.cpp)
+  target_compile_definitions(cc1_local_storage_tests
+    PRIVATE CC1_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}/Tests"
+  )
+  target_link_libraries(cc1_local_storage_tests
+    PRIVATE cc1_codegen cc1_frontend cc1_project_options cc1_warnings
+  )
+  add_test(NAME local_storage_analysis COMMAND cc1_local_storage_tests)
+  set_tests_properties(local_storage_analysis PROPERTIES TIMEOUT 10)
 
   # Run the generated loop as native code when the LLVM tools are installed.
   # Use the tools exported by the selected MLIR package. PATH can still contain
@@ -222,4 +235,5 @@ if(CC1_ENABLE_MLIR)
   endif()
 
   add_subdirectory(CodeGen/Memory)
+  add_subdirectory(CodeGen/SSA)
 endif()

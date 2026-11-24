@@ -43,8 +43,12 @@ if(MLIR_ENABLED)
   endif()
 
   run_case(0 --emit-mlir locals.c)
-  if(NOT "${OUTPUT}" MATCHES "tensorium.alloca" OR NOT "${OUTPUT}" MATCHES "tensorium.store" OR NOT "${OUTPUT}" MATCHES "tensorium.load" OR NOT "${OUTPUT}" MATCHES "(func\\.)?call @add" OR NOT "${DIAGNOSTIC}" STREQUAL "")
-    message(FATAL_ERROR "Incorrect local storage or call MLIR:\n${OUTPUT}\n${DIAGNOSTIC}")
+  if("${OUTPUT}" MATCHES "tensorium\\.(alloca|store|load)" OR
+     NOT "${OUTPUT}" MATCHES "arith\\.constant 1 : i32" OR
+     NOT "${OUTPUT}" MATCHES "arith\\.constant 4 : i32" OR
+     NOT "${OUTPUT}" MATCHES "(func\\.)?call @add" OR
+     NOT "${DIAGNOSTIC}" STREQUAL "")
+    message(FATAL_ERROR "Incorrect SSA local or call MLIR:\n${OUTPUT}\n${DIAGNOSTIC}")
   endif()
 
   if("${OUTPUT}" MATCHES "memref\\.")

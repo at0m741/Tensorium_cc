@@ -55,8 +55,6 @@ mlir::LogicalResult MLIRGen::emitIf(const IfStmt &stmt,
                                     mlir::func::FuncOp function) {
   auto loc = builder.getUnknownLoc();
 
-  materializeParameters();
-
   mlir::Value condition = emitCondition(*stmt.cond);
   if (!condition)
     return mlir::failure();
@@ -131,8 +129,6 @@ mlir::LogicalResult MLIRGen::emitWhile(const WhileStmt &stmt,
                                        mlir::func::FuncOp function) {
   auto loc = builder.getUnknownLoc();
 
-  materializeParameters();
-
   auto parentPoint = builder.saveInsertionPoint();
 
   auto *conditionBlock = builder.createBlock(&function.getBody());
@@ -184,8 +180,6 @@ mlir::LogicalResult MLIRGen::emitWhile(const WhileStmt &stmt,
 mlir::LogicalResult MLIRGen::emitFor(const ForStmt &stmt,
                                      mlir::func::FuncOp function) {
   auto loc = builder.getUnknownLoc();
-
-  materializeParameters();
 
   if (stmt.init) {
     CompoundStmt initializer;

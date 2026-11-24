@@ -25,6 +25,20 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
       mlir::Type type = lowerType(*var->type, var->loc);
       if (!type)
         return mlir::failure();
+      if (var->init && !storageAnalysis.needsStorage(var)) {
+        mlir::Value value = emitExpr(*var->init);
+        if (!value)
+          return mlir::failure();
+
+        if (value.getType() != type) {
+          diag.error(var->loc,
+                     "MLIR initializer type does not match the local variable");
+          return mlir::failure();
+        }
+
+        values[var] = value;
+        continue;
+      }
       auto address = createObjectStorage(type, *var->type);
       storage[var] = address;
       if (var->init) {

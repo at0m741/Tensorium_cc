@@ -8,7 +8,9 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
 #include "mlir/IR/Verifier.h"
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -245,14 +247,14 @@ void lowers_locals_and_discarded_calls() {
     if (auto x = mlir::dyn_cast<mlir::func::CallOp>(op))
       call = x;
   }
-  EXPECT(slots.size() == 2 && stores.size() == 2 && loads.size() == 2);
-  EXPECT(stores[0]->getOperand(1) == slots[0].getResult());
-  EXPECT(stores[1]->getOperand(1) == slots[1].getResult());
-  EXPECT(loads[0]->getOperand(0) == slots[0].getResult());
-  EXPECT(loads[1]->getOperand(0) == slots[1].getResult());
+  EXPECT(slots.empty() && stores.empty() && loads.empty());
   EXPECT(call && call.getCallee() == "add");
-  EXPECT(call.getOperands()[0] == loads[0].getResult());
-  EXPECT(call.getOperands()[1] == loads[1].getResult());
+  auto first =
+      call.getOperands()[0].getDefiningOp<mlir::arith::ConstantIntOp>();
+  auto second =
+      call.getOperands()[1].getDefiningOp<mlir::arith::ConstantIntOp>();
+  EXPECT(first && first.value() == 1);
+  EXPECT(second && second.value() == 4);
   EXPECT(call.getResult(0).use_empty());
   auto ret = mlir::cast<mlir::func::ReturnOp>(fn.getBody().front().back());
   auto zero =
@@ -273,10 +275,9 @@ void respects_local_shadowing_and_mutation() {
     if (auto x = mlir::dyn_cast<tensorium::StoreOp>(op))
       stores.push_back(x);
   }
-  EXPECT(slots.size() == 2 && stores.size() == 3);
-  EXPECT(stores[0]->getOperand(1) == slots[0].getResult());
-  EXPECT(stores[1]->getOperand(1) == slots[1].getResult());
-  EXPECT(stores[2]->getOperand(1) == slots[0].getResult());
+  EXPECT(slots.size() == 1 && stores.size() == 2);
+  EXPECT(stores[0].getAddress() == slots[0].getResult());
+  EXPECT(stores[1].getAddress() == slots[0].getResult());
   auto ret = mlir::cast<mlir::func::ReturnOp>(fn.getBody().front().back());
   auto load = ret.getOperands().front().getDefiningOp<tensorium::LoadOp>();
   EXPECT(load && load->getOperand(0) == slots[0].getResult());
@@ -329,15 +330,15 @@ void converts_local_initializers_and_preserves_explicit_returns() {
             "int ignored = 9; }");
   auto module = c.generate();
   auto fn = module->lookupSymbol<mlir::func::FuncOp>("f");
-  tensorium::AllocaOp slot;
-  for (auto &op : fn.getBody().front())
-    if (auto x = mlir::dyn_cast<tensorium::AllocaOp>(op))
-      slot = x;
-  EXPECT(slot);
-  auto pointerType = mlir::cast<tensorium::PtrType>(slot.getResult().getType());
-  EXPECT(pointerType.getPointeeType().isInteger(16));
+  fn.walk([](tensorium::AllocaOp) { EXPECT(false); });
+  fn.walk([](tensorium::StoreOp) { EXPECT(false); });
+  fn.walk([](tensorium::LoadOp) { EXPECT(false); });
   auto ret = mlir::cast<mlir::func::ReturnOp>(fn.getBody().front().back());
-  EXPECT(ret.getOperands().front().getDefiningOp<mlir::arith::ExtSIOp>());
+  auto extension =
+      ret.getOperands().front().getDefiningOp<mlir::arith::ExtSIOp>();
+  EXPECT(extension);
+  EXPECT(extension.getIn().getType().isInteger(16));
+  EXPECT(extension.getResult().getType().isInteger(32));
   auto mainFn = module->lookupSymbol<mlir::func::FuncOp>("main");
   EXPECT(mainFn.getBody().front().getOperations().size() == 2);
   EXPECT(mlir::cast<mlir::func::ReturnOp>(mainFn.getBody().front().back())
@@ -556,20 +557,115 @@ void preserves_for_initializer_shadowing_and_body_returns() {
       counterStorage =
           comparison.getLhs().getDefiningOp<tensorium::LoadOp>().getAddress();
   });
-  EXPECT(parameterStorage && counterStorage);
-  EXPECT(parameterStorage != counterStorage);
+  EXPECT(!parameterStorage && counterStorage);
   unsigned parameterReturns = 0, counterReturns = 0;
   function.walk([&](mlir::func::ReturnOp ret) {
-    auto load = ret.getOperands().front().getDefiningOp<tensorium::LoadOp>();
-    EXPECT(load);
-    if (load.getAddress() == parameterStorage)
+    if (ret.getOperands().front() == function.getArgument(0)) {
       ++parameterReturns;
-    else if (load.getAddress() == counterStorage)
+    } else {
+      auto load = ret.getOperands().front().getDefiningOp<tensorium::LoadOp>();
+      EXPECT(load && load.getAddress() == counterStorage);
       ++counterReturns;
-    else
-      EXPECT(false);
+    }
   });
   EXPECT(parameterReturns == 1 && counterReturns == 1);
+}
+
+std::string readSSAParametersFixture() {
+  const std::string path =
+      std::string(CC1_TEST_SOURCE_DIR) + "/CodeGen/SSA/parameters.c";
+  std::ifstream input(path);
+  if (!input)
+    throw std::runtime_error("cannot open fixture: " + path);
+  return std::string(std::istreambuf_iterator<char>(input),
+                     std::istreambuf_iterator<char>());
+}
+
+void keeps_readonly_parameters_in_ssa_across_control_flow() {
+  Context c(readSSAParametersFixture());
+  auto module = c.generate();
+  for (const char *name : {"choose", "while_readonly", "for_readonly",
+                           "sizeof_readonly"}) {
+    auto function = module->lookupSymbol<mlir::func::FuncOp>(name);
+    EXPECT(function);
+    function.walk([](tensorium::AllocaOp) { EXPECT(false); });
+  }
+
+  auto choose = module->lookupSymbol<mlir::func::FuncOp>("choose");
+  choose.walk([](tensorium::LoadOp) { EXPECT(false); });
+  choose.walk([](tensorium::StoreOp) { EXPECT(false); });
+  auto branch =
+      mlir::cast<mlir::cf::CondBranchOp>(choose.getBody().front().back());
+  auto condition = branch.getCondition().getDefiningOp<mlir::arith::CmpIOp>();
+  EXPECT(condition && condition.getLhs() == choose.getArgument(0));
+  unsigned directReturns = 0, addedReturns = 0;
+  choose.walk([&](mlir::func::ReturnOp ret) {
+    mlir::Value value = ret.getOperands().front();
+    if (value == choose.getArgument(1)) {
+      ++directReturns;
+    } else {
+      auto add = value.getDefiningOp<mlir::arith::AddIOp>();
+      EXPECT(add && add.getLhs() == choose.getArgument(1));
+      ++addedReturns;
+    }
+  });
+  EXPECT(directReturns == 1 && addedReturns == 1);
+
+  for (const char *name : {"while_readonly", "for_readonly"}) {
+    auto function = module->lookupSymbol<mlir::func::FuncOp>(name);
+    unsigned loads = 0, stores = 0;
+    function.walk([&](tensorium::LoadOp load) {
+      EXPECT(load.getAddress() == function.getArgument(0));
+      ++loads;
+    });
+    function.walk([&](tensorium::StoreOp store) {
+      EXPECT(store.getAddress() == function.getArgument(0));
+      ++stores;
+    });
+    EXPECT(loads > 0 && stores == 1);
+    function.walk([&](mlir::func::ReturnOp ret) {
+      EXPECT(ret.getOperands().front() == function.getArgument(1));
+    });
+  }
+}
+
+void allocates_addressable_parameters_in_the_entry_block() {
+  Context c(readSSAParametersFixture());
+  auto module = c.generate();
+  struct Case {
+    const char *name;
+    std::vector<unsigned> storedParameters;
+  };
+  const Case cases[] = {
+      {"conditional_write", {1}},
+      {"branch_address", {1}},
+      {"loop_address", {0, 1}},
+      {"pointer_rebind", {1}},
+      {"update_pointer", {0, 1}},
+  };
+  for (const auto &test : cases) {
+    auto function = module->lookupSymbol<mlir::func::FuncOp>(test.name);
+    EXPECT(function);
+    auto &entry = function.getBody().front();
+    unsigned allocations = 0;
+    function.walk([&](tensorium::AllocaOp allocation) {
+      EXPECT(allocation->getBlock() == &entry);
+      ++allocations;
+    });
+    EXPECT(allocations == test.storedParameters.size());
+    for (unsigned i : test.storedParameters) {
+      unsigned initializations = 0;
+      function.walk([&](tensorium::StoreOp store) {
+        if (store->getOperand(0) != function.getArgument(i))
+          return;
+        auto allocation =
+            store.getAddress().getDefiningOp<tensorium::AllocaOp>();
+        EXPECT(allocation && store->getBlock() == &entry);
+        ++initializations;
+      });
+      EXPECT(initializations == 1);
+    }
+  }
 }
 
 void rejects_unsupported_constructs() {
@@ -645,6 +741,10 @@ int main() {
        keeps_nested_for_jump_targets_separate},
       {"preserves_for_initializer_shadowing_and_body_returns",
        preserves_for_initializer_shadowing_and_body_returns},
+      {"keeps_readonly_parameters_in_ssa_across_control_flow",
+       keeps_readonly_parameters_in_ssa_across_control_flow},
+      {"allocates_addressable_parameters_in_the_entry_block",
+       allocates_addressable_parameters_in_the_entry_block},
       {"rejects_unsupported_constructs", rejects_unsupported_constructs},
   };
   int failed = 0;

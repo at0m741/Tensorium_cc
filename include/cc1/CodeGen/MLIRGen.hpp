@@ -11,6 +11,7 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
 
+#include "cc1/CodeGen/LocalStorageAnalysis.hpp"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/Config/llvm-config.h"
 #include <mlir/IR/Value.h>
@@ -38,12 +39,12 @@ private:
   llvm::DenseMap<const Decl *, mlir::Value> values;
   llvm::DenseMap<const Decl *, Address> storage;
   llvm::DenseMap<const Decl *, mlir::func::FuncOp> functions;
+  LocalStorageAnalysis storageAnalysis;
 
   Address createObjectStorage(mlir::Type type, const Type &objectType);
   Address emitLValue(const Expr &expr);
   mlir::Value emitLoad(Address address);
   void emitStore(mlir::Value value, Address address);
-  void materializeParameters();
   mlir::Value emitPointerOffset(mlir::Value base, const Expr &offset,
                                 bool subtract = false);
   mlir::Value emitUpdate(const UnaryExpr &expr);

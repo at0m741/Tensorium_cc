@@ -1,4 +1,5 @@
 #include "cc1/CodeGen/MLIRGen.hpp"
+#include "cc1/CodeGen/LocalStorageAnalysis.hpp"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "llvm/ADT/SmallVector.h"
@@ -19,8 +20,20 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
     diag.error(function.loc, "MLIR parameter count mismatch");
     return mlir::failure();
   }
-  for (unsigned i = 0; i < function.params.size(); ++i)
-    values[function.params[i]] = entry->getArgument(i);
+  storageAnalysis.analyze(function);
+  for (unsigned i = 0; i < function.params.size(); ++i) {
+    const auto *parameter = function.params[i];
+    mlir::Value value = entry->getArgument(i);
+    if (storageAnalysis.needsStorage(parameter)) {
+      // All parameter storage must dominate every use, including addresses
+      // first requested inside a branch or loop.
+      auto address = createObjectStorage(value.getType(), *parameter->type);
+      emitStore(value, address);
+      storage[parameter] = address;
+    } else {
+      values[parameter] = value;
+    }
+  }
   if (mlir::failed(emitBlock(*function.body, op))) {
     values.clear();
     storage.clear();

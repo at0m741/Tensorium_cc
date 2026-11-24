@@ -73,18 +73,14 @@ Address MLIRGen::emitLValue(const Expr &expr) {
   if (slot != storage.end())
     return slot->second;
 
-  auto value = values.find(reference->decl);
-  if (value == values.end()) {
+  if (values.count(reference->decl)) {
+    diag.error(reference->loc,
+               "MLIR storage analysis did not provide storage for this lvalue");
+  } else {
     diag.error(reference->loc,
                "unresolved assignment target in MLIR generation");
-    return {};
   }
-
-  auto address =
-      createObjectStorage(value->second.getType(), *reference->decl->type);
-  emitStore(value->second, address);
-  storage[reference->decl] = address;
-  return address;
+  return {};
 }
 
 mlir::Value MLIRGen::emitLoad(Address address) {
@@ -108,18 +104,6 @@ void MLIRGen::emitStore(mlir::Value value, Address address) {
   builder.create<tensorium::StoreOp>(builder.getUnknownLoc(), value,
                                    address.base);
 #endif
-}
-
-void MLIRGen::materializeParameters() {
-  for (const auto &binding : values) {
-    if (storage.find(binding.first) != storage.end())
-      continue;
-
-    auto address =
-        createObjectStorage(binding.second.getType(), *binding.first->type);
-    emitStore(binding.second, address);
-    storage[binding.first] = address;
-  }
 }
 
 mlir::Value MLIRGen::emitPointerOffset(mlir::Value base, const Expr &offset,

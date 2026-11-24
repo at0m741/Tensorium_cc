@@ -27,8 +27,13 @@ Array bounds must currently be positive integer literals, as required by the
 parser. Arrays are filled by assignments; brace/string aggregate initializers
 and variable-length arrays are not implemented. Neither are structs/unions,
 global/static object generation, function pointers, general pointer casts,
-`void *`, volatile or atomic accesses, heap allocation or protected pointers.
+`void *`, volatile or atomic accesses, or protected pointers.
 This milestone does not claim complete C memory support.
+
+Ordinary `malloc`/`free` and memory-library prototypes are currently blocked by
+their `void *` types. Typed external allocation/release wrappers can already be
+compiled and used; the compiler does not need its own allocator for that path.
+Heap allocation tracking and protection metadata are not implemented.
 
 ## IR and representation
 
@@ -92,3 +97,10 @@ and `-O2`. The external-call fixture links a separate Clang-compiled translation
 unit, exercising both directions of the pointer ABI. Conversion fixtures cover
 layouts, parse/print round-trips, idempotence, verifier failures, invalid target
 layouts and rejection of residual Tensorium types hidden in metadata.
+
+## Generation audit
+
+The [memory and CodeGen audit](audits/memory_codegen_audit.md) records actual
+generated IR, remaining frontend/ABI gaps, redundant memory traffic, and a
+proposed SSA/storage split. It also documents loop-local stack allocation and
+lexical lifetime work that remains necessary before a protected pipeline.
