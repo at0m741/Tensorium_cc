@@ -250,6 +250,72 @@ void preservesAddressableAndMutableLocals() {
            "local_pointer_rebind: reassigned pointer needs pointer storage");
   });
 }
+
+void hoistsLoopObjectStorage() {
+  Fixture fixture("loop_storage.c");
+  auto module = fixture.generate();
+  for (const char *name : {"loop_for_storage", "loop_while_storage",
+                           "loop_address_storage", "loop_array_storage",
+                           "loop_call_initializer", "loop_conditional_initializer",
+                           "loop_load_initializer"})
+    expectAllocations(function(module.get(), name), 3);
+  // The two shadowed values and the two counters have independent slots.
+  expectAllocations(function(module.get(), "loop_nested_storage"), 5);
+
+  auto array = function(module.get(), "loop_array_storage");
+  unsigned arraySlots = 0;
+  array.walk([&](tensorium::AllocaOp allocation) {
+    auto pointer =
+        mlir::cast<tensorium::PtrType>(allocation.getResult().getType());
+    if (mlir::isa<tensorium::ArrayType>(pointer.getPointeeType()))
+      ++arraySlots;
+  });
+  expect(arraySlots == 1, "loop_array_storage: expected one fixed-size array slot");
+}
+
+void preservesLoopInitializerPlacement() {
+  Fixture fixture("loop_storage.c");
+  auto module = fixture.generate();
+  for (const char *name : {"loop_call_initializer",
+                           "loop_conditional_initializer"}) {
+    auto fn = function(module.get(), name);
+    auto *entry = &fn.getBody().front();
+    unsigned calls = 0;
+    fn.walk([&](mlir::func::CallOp call) {
+      if (call.getCallee() != "loop_next")
+        return;
+      ++calls;
+      expect(call->getBlock() != entry,
+             fn.getSymName().str() + ": initializer call was hoisted");
+      unsigned initializations = 0;
+      fn.walk([&](tensorium::StoreOp store) {
+        if (store->getOperand(0) != call.getResult(0))
+          return;
+        auto slot = store.getAddress().getDefiningOp<tensorium::AllocaOp>();
+        expect(slot && slot->getBlock() == entry,
+               fn.getSymName().str() + ": initializer needs entry storage");
+        expect(store->getBlock() == call->getBlock(),
+               fn.getSymName().str() + ": initialization moved away from its call");
+        ++initializations;
+      });
+      expect(initializations == 1,
+             fn.getSymName().str() + ": expected one store of the initializer");
+    });
+    expect(calls == 1, fn.getSymName().str() + ": expected one initializer call");
+  }
+
+  auto loadFn = function(module.get(), "loop_load_initializer");
+  unsigned initializerLoads = 0;
+  loadFn.walk([&](tensorium::LoadOp load) {
+    if (load.getAddress() != loadFn.getArgument(1))
+      return;
+    ++initializerLoads;
+    expect(load->getBlock() != &loadFn.getBody().front(),
+           "loop_load_initializer: initializer load was hoisted");
+  });
+  expect(initializerLoads == 1,
+         "loop_load_initializer: expected one pointee load in the loop");
+}
 } // namespace
 
 int main() {
@@ -263,6 +329,8 @@ int main() {
       {"keeps_loop_temporaries_out_of_memory", keepsLoopTemporariesOutOfMemory},
       {"preserves_addressable_and_mutable_locals",
        preservesAddressableAndMutableLocals},
+      {"hoists_loop_object_storage", hoistsLoopObjectStorage},
+      {"preserves_loop_initializer_placement", preservesLoopInitializerPlacement},
   };
   unsigned failures = 0;
   for (const auto &test : tests) {

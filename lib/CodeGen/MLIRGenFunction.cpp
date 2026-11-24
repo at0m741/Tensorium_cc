@@ -1,5 +1,5 @@
-#include "cc1/CodeGen/MLIRGen.hpp"
 #include "cc1/CodeGen/LocalStorageAnalysis.hpp"
+#include "cc1/CodeGen/MLIRGen.hpp"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "llvm/ADT/SmallVector.h"
@@ -27,7 +27,7 @@ mlir::LogicalResult MLIRGen::emitFunction(const FuncDecl &function) {
     if (storageAnalysis.needsStorage(parameter)) {
       // All parameter storage must dominate every use, including addresses
       // first requested inside a branch or loop.
-      auto address = createObjectStorage(value.getType(), *parameter->type);
+      auto address = createObjectStorage(op, value.getType(), *parameter->type);
       emitStore(value, address);
       storage[parameter] = address;
     } else {

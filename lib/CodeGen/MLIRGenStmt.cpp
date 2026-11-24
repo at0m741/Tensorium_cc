@@ -39,7 +39,7 @@ mlir::LogicalResult MLIRGen::emitBlock(const CompoundStmt &block,
         values[var] = value;
         continue;
       }
-      auto address = createObjectStorage(type, *var->type);
+      auto address = createObjectStorage(function, type, *var->type);
       storage[var] = address;
       if (var->init) {
         mlir::Value value = emitExpr(*var->init);

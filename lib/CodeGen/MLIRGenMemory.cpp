@@ -5,7 +5,11 @@
 
 using tensorium::createOp;
 
-Address MLIRGen::createObjectStorage(mlir::Type type, const Type &objectType) {
+Address MLIRGen::createObjectStorage(mlir::func::FuncOp function,
+                                     mlir::Type type, const Type &objectType) {
+  mlir::OpBuilder::InsertionGuard guard(builder);
+  builder.setInsertionPointToStart(&function.getBody().front());
+
 #if LLVM_VERSION_MAJOR >= 22
   auto allocation = tensorium::AllocaOp::create(
       builder, builder.getUnknownLoc(),
@@ -86,12 +90,12 @@ Address MLIRGen::emitLValue(const Expr &expr) {
 mlir::Value MLIRGen::emitLoad(Address address) {
 #if LLVM_VERSION_MAJOR >= 22
   return tensorium::LoadOp::create(builder, builder.getUnknownLoc(),
-                                  address.elementType, address.base)
+                                   address.elementType, address.base)
       .getResult();
 #else
   return builder
       .create<tensorium::LoadOp>(builder.getUnknownLoc(), address.elementType,
-                                address.base)
+                                 address.base)
       .getResult();
 #endif
 }
@@ -102,7 +106,7 @@ void MLIRGen::emitStore(mlir::Value value, Address address) {
                              address.base);
 #else
   builder.create<tensorium::StoreOp>(builder.getUnknownLoc(), value,
-                                   address.base);
+                                     address.base);
 #endif
 }
 

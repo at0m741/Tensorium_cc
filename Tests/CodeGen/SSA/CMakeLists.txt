@@ -23,7 +23,7 @@ if(CC1_MLIR_OPT AND CC1_MLIR_TRANSLATE AND CC1_RUNTIME_CLANG)
   )
   set_tests_properties(mlir_parameter_ssa_runtime PROPERTIES TIMEOUT 30)
 
-  foreach(FIXTURE IN ITEMS locals locals_control_flow locals_memory)
+  foreach(FIXTURE IN ITEMS locals locals_control_flow locals_memory loop_storage)
     add_test(NAME mlir_ssa_${FIXTURE}_runtime
       COMMAND ${CMAKE_COMMAND}
         -DCC1=$<TARGET_FILE:cc1>
