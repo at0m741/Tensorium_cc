@@ -1,4 +1,7 @@
-module {
+module attributes {
+  llvm.data_layout = "e-m:o-i64:64-i128:128-n32:64-S128",
+  llvm.target_triple = "aarch64-apple-macosx13.0.0"
+} {
   func.func @f(%arg0: i32) -> i32 {
     %c1_i32 = arith.constant 1 : i32
     %c2_i32 = arith.constant 2 : i32
