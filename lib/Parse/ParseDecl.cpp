@@ -408,16 +408,8 @@ VarDecl *Parser::parseVarDecl(Type *baseType, const std::string &name,
   var->type = baseType;
   var->isGlobal = global;
 
-  if (match(TokenKind::ASSIGN)) {
-    if (global) {
-      error(_cur.loc, "global initializers are not implemented yet");
-      while (!_cur.isEof() && !check(TokenKind::COMMA) &&
-             !check(TokenKind::SEMICOLON))
-        advance();
-    } else {
-      var->init = parseExpr(infixPrec(TokenKind::ASSIGN));
-    }
-  }
+  if (match(TokenKind::ASSIGN))
+    var->init = parseExpr(infixPrec(TokenKind::ASSIGN));
 
   if (match(TokenKind::COMMA)) {
     error(_cur.loc, "multiple declarators are not supported yet");
@@ -427,7 +419,6 @@ VarDecl *Parser::parseVarDecl(Type *baseType, const std::string &name,
 
   return var;
 }
-
 Type *Parser::parseStructOrUnion() {
   bool isStruct = check(TokenKind::KW_STRUCT);
   advance();

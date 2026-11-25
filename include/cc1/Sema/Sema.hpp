@@ -21,6 +21,7 @@ private:
   SymbolTable symbols;
   std::unordered_map<std::string, Type *> tags;
   std::unordered_map<Decl *, FuncDecl *> definitions;
+  std::unordered_map<const Decl *, const VarDecl *> globalObjectDefinitions;
   FuncDecl *currentFunction = nullptr;
   unsigned loopDepth = 0;
 

@@ -12,6 +12,8 @@ bool Sema::analyze(TranslationUnit &unit) {
   symbols.push();
   tags.clear();
   definitions.clear();
+  globalObjectDefinitions.clear();
+
   for (auto *d : unit.decls) {
     if (!declare(d, true))
       continue;
