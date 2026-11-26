@@ -41,6 +41,14 @@ globals; symbol references lower to LLVM addresses. `TensoriumAttrs.td` defines
 `GlobalAddressAttr` for static pointer initializers, lowered to LLVM address
 initializer regions without runtime code. See [global object support](globals.md).
 
+`Tensorium_VoidType` and `Tensorium_PtrCastOp` represent incomplete void
+pointees and address-preserving object/void-pointer conversions. Verifiers reject
+void allocation/access/arithmetic and unrelated typed-pointer casts. Native LLVM
+conversion removes the cast after mapping both endpoints to opaque pointers.
+The frontend now emits full-width signed/unsigned integer function results,
+including the native POSIX `ssize_t` return used by `write` on LP64 targets.
+See the [native write example](../Tests/Driver/fixtures/write.c).
+
 ## Module boundaries
 
 The C frontend stays under `include/cc1` and its existing `lib` directories.

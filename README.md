@@ -29,6 +29,31 @@ ctest --test-dir build-mlir --output-on-failure
 build-mlir/cc1 --emit-mlir Tests/function_body.c
 ```
 
+In MLIR builds, `cc1` uses the native compiler driver by default. It accepts `-c`, `-S`,
+`-o`, include paths, multiple C sources, objects and static libraries:
+
+```sh
+build-mlir/cc1 -I Tests/Driver/fixtures/include \
+  Tests/Driver/fixtures/main.c Tests/Driver/fixtures/helper.c \
+  -o /tmp/tensorium-program
+/tmp/tensorium-program
+```
+
+See [the native driver guide](docs/driver.md) for tool discovery, supported flags
+and current limitations. Use `cc1 -fsyntax-only` for semantic checking; explicit
+dumps, `-E` and `--emit-mlir` remain frontend actions. `tensoriumcc` is an
+alternate native driver executable.
+
+A first terminal-output example uses native `write` with a byte buffer:
+
+```sh
+build-mlir/cc1 Tests/Driver/fixtures/write.c -o /tmp/write-example
+/tmp/write-example
+```
+
+This example uses a manual LP64 POSIX declaration; SDK headers and string-literal
+emission remain unfinished. See [the write example](docs/driver.md#native-write-example).
+
 `--emit-mlir` emits Tensorium memory operations alongside `arith`, `cf` and
 `func`. For C object memory, including stored pointers and fixed-size arrays,
 lower directly to LLVM using the target layout recorded by CC1:
@@ -65,7 +90,8 @@ execute at the source declaration, including on each loop iteration. See the
 File-scope objects now use TableGen-defined `tensorium.global` and
 `tensorium.get_global` operations, with LLVM lowering for declarations,
 internal/external linkage, integer constant initializers, direct object address
-initializers (`int *p = &global`) and zero-initialized objects. Constant evaluation currently supports integer literals, arithmetic
+initializers (`int *p = &global`, `values + 2`, `&matrix[1][2]`) and zero-initialized
+objects. Constant evaluation currently supports integer literals, arithmetic
 conversions and unary/binary `+`, `-`, `*`. See [global object support](docs/globals.md)
 for limitations and test commands.
 

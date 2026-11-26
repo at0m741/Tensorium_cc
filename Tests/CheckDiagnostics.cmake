@@ -16,7 +16,7 @@ foreach(ACTION IN ITEMS parse dump)
     endif()
 
     execute_process(
-      COMMAND "${CC1}" ${COLOR_OPTION} ${ACTION_OPTION} "${SOURCE}"
+      COMMAND "${CC1}" -cc1 ${COLOR_OPTION} ${ACTION_OPTION} "${SOURCE}"
       RESULT_VARIABLE STATUS
       OUTPUT_VARIABLE TOKENS
       ERROR_VARIABLE DIAGNOSTIC

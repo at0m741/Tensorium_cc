@@ -30,12 +30,12 @@ PtrType::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
     return mlir::failure();
   }
 
-  if (!llvm::isa<mlir::IntegerType, mlir::FloatType, PtrType, ArrayType>(
-          pointeeType)) {
-    emitError()
-        << "expected an integer, floating-point, array, or Tensorium pointer "
-           "pointee type, but got "
-        << pointeeType;
+  if (!llvm::isa<mlir::IntegerType, mlir::FloatType, PtrType, ArrayType,
+                 VoidType>(pointeeType)) {
+    emitError() << "expected an integer, floating-point, array, void, or "
+                   "Tensorium pointer "
+                   "pointee type, but got "
+                << pointeeType;
     return mlir::failure();
   }
 

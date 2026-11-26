@@ -45,6 +45,7 @@ cc1_add_module(cc1_ast
   lib/AST/Type.cpp
   lib/AST/ASTDump.cpp
   lib/AST/ConstantExpr.cpp
+  lib/AST/AddressConstant.cpp
 )
 target_link_libraries(cc1_ast PUBLIC cc1_basic)
 
@@ -146,6 +147,11 @@ if(CC1_ENABLE_MLIR)
 
   target_link_libraries(cc1_frontend PRIVATE cc1_codegen)
   target_compile_definitions(cc1_frontend PRIVATE CC1_ENABLE_MLIR=1)
+  add_subdirectory(lib/Driver)
+  target_link_libraries(cc1 PRIVATE cc1_driver)
+  target_compile_definitions(cc1 PRIVATE CC1_HAS_NATIVE_DRIVER=1)
+  add_dependencies(cc1 tensorium-opt)
+  add_subdirectory(tools/tensoriumcc)
 endif()
 if(BUILD_TESTING AND EXISTS ${PROJECT_SOURCE_DIR}/Tests/CMakeLists.txt)
   add_subdirectory(Tests)

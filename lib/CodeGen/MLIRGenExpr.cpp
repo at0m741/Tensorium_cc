@@ -105,7 +105,8 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
 
   if (auto *ref = dynamic_cast<const IdentExpr *>(&expr)) {
     const Decl *key = ref->decl && ref->decl->canonicalDecl
-                          ? ref->decl->canonicalDecl : ref->decl;
+                          ? ref->decl->canonicalDecl
+                          : ref->decl;
     if (globals.count(key)) {
       auto address = emitLValue(expr);
       return address ? emitLoad(address) : mlir::Value{};
@@ -198,12 +199,16 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
         return {};
 
       if (!mlir::isa<tensorium::PtrType>(value.getType()) ||
-          value.getType() != destination) {
+          !mlir::isa<tensorium::PtrType>(destination)) {
         diag.error(cast->loc,
-                   "MLIR pointer conversion requires matching pointee types");
+                   "MLIR pointer conversion requires object pointers");
         return {};
       }
-      return value;
+      if (value.getType() == destination)
+        return value;
+      return createOp<tensorium::PtrCastOp>(builder, builder.getUnknownLoc(),
+                                            destination, value)
+          .getResult();
     }
     if (cast->kind == ImplicitCastKind::Arithmetic &&
         cast->operand->type->isIntegral() && cast->type->isIntegral()) {

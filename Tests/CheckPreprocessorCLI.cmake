@@ -3,7 +3,7 @@ file(MAKE_DIRECTORY "${SCRATCH_DIR}")
 
 function(run_case expected_status)
   execute_process(
-    COMMAND "${CC1}" -fno-color-diagnostics ${ARGN}
+    COMMAND "${CC1}" -cc1 -fno-color-diagnostics ${ARGN}
     RESULT_VARIABLE STATUS OUTPUT_VARIABLE OUTPUT ERROR_VARIABLE DIAGNOSTIC
     TIMEOUT 4
   )

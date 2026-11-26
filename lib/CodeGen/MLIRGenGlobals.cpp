@@ -1,3 +1,4 @@
+#include "cc1/AST/AddressConstant.hpp"
 #include "cc1/AST/ConstantExpr.hpp"
 #include "cc1/CodeGen/MLIRGen.hpp"
 #include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
@@ -37,34 +38,38 @@ mlir::LogicalResult MLIRGen::emitGlobals(const TranslationUnit &unit) {
           cast->kind == ImplicitCastKind::NullToPointer) {
         initial = builder.getUnitAttr();
       } else if (var.type->isPointer()) {
-        const Expr *expression = var.init;
-        // Compatible pointer conversions can add pointee qualifiers.
-        while (auto *conversion =
-                   dynamic_cast<const ImplicitCastExpr *>(expression)) {
-          if (conversion->kind != ImplicitCastKind::Pointer)
-            break;
-          expression = conversion->operand;
-        }
-        auto *address = dynamic_cast<const UnaryExpr *>(expression);
-        auto *reference =
-            address && address->op == UnaryOp::ADDR
-                ? dynamic_cast<const IdentExpr *>(address->operand)
-                : nullptr;
-        const Decl *decl = reference ? reference->decl : nullptr;
-        const Decl *referencedKey =
-            decl && decl->canonicalDecl ? decl->canonicalDecl : decl;
-        auto referenced = globals.find(referencedKey);
-        if (referenced == globals.end()) {
-          diag.error(
-              var.init->loc,
+        auto address = evaluateAddressConstant(*var.init, target);
+        if (!address.value) {
+          const char *message =
               "global pointer initializer requires a global object address "
-              "or a null pointer constant");
+              "or a null pointer constant";
+          if (address.error == AddressConstantError::InvalidOffset)
+            message = "global address offset requires a supported, "
+                      "non-overflowing integer constant expression";
+          else if (address.error == AddressConstantError::OutOfBounds)
+            message =
+                "global address offset is outside the object or array bounds";
+          diag.error(address.errorExpr ? address.errorExpr->loc : var.init->loc,
+                     message);
           return mlir::failure();
         }
-        auto object = lowerType(*referenced->second->type, var.init->loc);
-        if (!object)
+        const auto &constant = *address.value;
+        const Decl *key = constant.object->canonicalDecl
+                              ? constant.object->canonicalDecl
+                              : constant.object;
+        auto referenced = globals.find(key);
+        if (referenced == globals.end()) {
+          diag.error(var.init->loc,
+                     "unresolved object in global address initializer");
           return mlir::failure();
-        if (mlir::cast<tensorium::PtrType>(type).getPointeeType() != object) {
+        }
+        auto pointee = lowerType(*constant.pointeeType, var.init->loc);
+        if (!pointee)
+          return mlir::failure();
+        auto destination =
+            mlir::cast<tensorium::PtrType>(type).getPointeeType();
+        if (destination != pointee &&
+            !mlir::isa<tensorium::VoidType>(destination)) {
           diag.error(
               var.init->loc,
               "global address initializer requires matching object types");
@@ -73,7 +78,8 @@ mlir::LogicalResult MLIRGen::emitGlobals(const TranslationUnit &unit) {
         initial = tensorium::GlobalAddressAttr::get(
             builder.getContext(),
             mlir::FlatSymbolRefAttr::get(builder.getContext(),
-                                         referenced->second->name));
+                                         referenced->second->name),
+            constant.indices);
       } else if (!var.type->isIntegral()) {
         diag.error(
             var.loc,

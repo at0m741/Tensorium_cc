@@ -66,8 +66,17 @@ arguments into that description and diagnoses conflicting actions.
 invocation. `execute()` runs the selected stages and writes output and diagnostics
 to caller-provided streams. Its retained AST can be inspected while the instance
 remains alive; AST dumping stops before Sema, while normal checking and typed
-dumping run semantic analysis. The executable only parses options and runs the
-instance.
+dumping run semantic analysis. The frontend entry parses options and runs the
+instance; native driver dispatch is described below.
+
+In MLIR builds, the `cc1` command uses `cc1_driver` to orchestrate one
+frontend/MLIR pipeline per C source, then native assembly/linking. Driver parsing,
+tool discovery and pipeline execution live under `include/cc1/Driver` and
+`lib/Driver`; the module uses LLVM Support without depending on AST or CodeGen.
+The executable dispatches frontend actions directly, including `-fsyntax-only`.
+Native compilation invokes `cc1 -cc1 --emit-mlir`; the reserved internal mode
+bypasses native driver dispatch. `tensoriumcc` remains an alternate driver command.
+See [the native driver guide](driver.md).
 
 ## Implementation boundaries
 
@@ -99,6 +108,13 @@ entry. Local initializer expressions and stores execute at the declaration's
 control-flow position. This prevents repeated stack allocation in loops while
 preserving repeated initialization and its side effects. Explicit lexical
 lifetime operations and variable-length stack allocation remain future work.
+
+The AST module also owns `ConstantExpr` and `AddressConstant` evaluators. The
+address evaluator resolves typed object-address expressions into a declaration
+and an array index path, checks intermediate/final bounds and rejects object
+reads. CodeGen turns that result into a TableGen-defined `GlobalAddressAttr`.
+The dialect verifies symbol resolution and typed paths; LLVM lowering chooses
+GEP index widths and object strides from the configured target layout.
 
 Tests live under `Tests/Basic`, `Tests/AST`, `Tests/Lex`, `Tests/Parse`,
 `Tests/Sema`, `Tests/CodeGen` and `Tests/Frontend`. CLI fixtures and expected dumps

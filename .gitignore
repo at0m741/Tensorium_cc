@@ -4,6 +4,9 @@ __pycache__/
 Tests/AST_AUDIT.md
 pybuild/
 build/
+# The local build entry can also be a symlink to an external build directory.
+/build
+/a.out
 /build-mlir/
 *.o
 *.so

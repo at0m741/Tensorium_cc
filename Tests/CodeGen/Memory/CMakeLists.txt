@@ -44,12 +44,16 @@ foreach(FIXTURE IN ITEMS address_dereference pointer_aliasing pointer_control_fl
                          pointer_assignment pointer_address nested_pointer
                          pointer_rebinding pointer_arithmetic pointer_array
                          multidimensional_array pointer_null pointer_updates
-                         address_dereference2 pointer_compound)
+                         address_dereference2 pointer_compound void_pointer integer_returns)
   cc1_add_memory_program(${FIXTURE})
 endforeach()
 
 cc1_add_memory_program(pointer_external ${CMAKE_CURRENT_SOURCE_DIR}/PointerExternalRuntime.c)
+cc1_add_memory_program(void_pointer_external ${CMAKE_CURRENT_SOURCE_DIR}/VoidPointerExternalRuntime.c)
 
-cc1_add_memory_rejection(void_pointer "only pointers to supported object types")
+cc1_add_memory_rejection(void_pointer_arithmetic "invalid operands")
+cc1_add_memory_rejection(void_pointer_dereference "dereference requires a pointer to object")
+cc1_add_memory_rejection(void_pointer_const "incompatible return type")
+cc1_add_memory_rejection(narrow_return "not implemented for this declaration")
 cc1_add_memory_rejection(volatile_pointee "volatile pointees")
 cc1_add_memory_rejection(const_write "assignment requires a modifiable lvalue")

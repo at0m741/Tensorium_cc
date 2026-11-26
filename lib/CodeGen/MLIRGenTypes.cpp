@@ -38,8 +38,8 @@ mlir::Type MLIRGen::lowerType(const ::Type &type, SourceLoc loc) {
 
   case Type::POINTER: {
     if (!type.pointee ||
-        !(type.pointee->isArithmetic() || type.pointee->isPointer() ||
-          type.pointee->isArray())) {
+        !(type.pointee->isVoid() || type.pointee->isArithmetic() ||
+          type.pointee->isPointer() || type.pointee->isArray())) {
       diag.error(loc, "MLIR generation currently supports only pointers "
                       "to supported object types");
       return {};
@@ -49,7 +49,9 @@ mlir::Type MLIRGen::lowerType(const ::Type &type, SourceLoc loc) {
       return {};
     }
 
-    mlir::Type pointee = lowerType(*type.pointee, loc);
+    mlir::Type pointee = type.pointee->isVoid()
+                             ? tensorium::VoidType::get(builder.getContext())
+                             : lowerType(*type.pointee, loc);
     if (!pointee)
       return {};
 

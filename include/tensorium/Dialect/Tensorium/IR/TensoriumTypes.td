@@ -4,6 +4,16 @@
 include "mlir/IR/AttrTypeBase.td"
 include "TensoriumDialect.td"
 
+def Tensorium_VoidType : TypeDef<Tensorium_Dialect, "Void"> {
+  let mnemonic = "void";
+  let summary = "Incomplete pointee marker for C void pointers";
+  let description = [{
+    Used inside ptr<void> to represent an object address without an element
+    type. This marker has no object size. It cannot be allocated, loaded,
+    stored, used as an array element, or used for pointer arithmetic.
+  }];
+}
+
 def Tensorium_PtrType : TypeDef<Tensorium_Dialect, "Ptr"> {
   let mnemonic = "ptr";
 

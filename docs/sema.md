@@ -2,7 +2,8 @@
 
 The normal frontend pipeline is `Lexer -> Preprocessor -> Parser -> Sema`.
 `Sema::analyze(TranslationUnit&)` returns true only if semantic analysis finishes
-without errors. The CLI runs this pipeline by default. `--dump-ast` stops after
+without errors. The CLI runs this pipeline for `-fsyntax-only`, explicit frontend actions,
+and each source compiled through the native driver. `--dump-ast` stops after
 parsing; `--dump-sema` prints the typed, converted AST after successful Sema.
 Neither mode prints a partial AST after an error in its pipeline.
 
@@ -73,9 +74,10 @@ Sema checks initializer types; CodeGen invokes the shared AST integer evaluator
 for the supported static initializer subset. A successful semantic-only check
 does not yet establish complete C99 static-initializer legality. Tensorium global
 operations and LLVM lowering are implemented for integer constant initializers,
-null pointer initializers, direct global object addresses and zero-initialized
-objects. General address arithmetic, aggregate initializers and static locals
-remain unfinished.
+null pointer initializers, global scalar/array addresses, constant pointer
+offsets and zero-initialized objects. The shared AST address evaluator preserves
+array dimensions and validates bounds during emission. Aggregate initializers
+and static locals remain unfinished.
 
 The [global fixtures](../Tests/CodeGen/Globals/) include successful CodeGen,
 structural checks, native execution cases and rejected initializers. See

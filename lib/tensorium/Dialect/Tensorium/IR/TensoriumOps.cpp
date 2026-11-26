@@ -10,11 +10,46 @@
 #include "tensorium/Dialect/Tensorium/IR/TensoriumOps.cpp.inc"
 
 mlir::LogicalResult tensorium::AllocaOp::verify() {
+  if (mlir::isa<VoidType>(getResult().getType().getPointeeType()))
+    return emitOpError("cannot allocate a void object");
   if (!getOperation()
            ->getParentWithTrait<mlir::OpTrait::AutomaticAllocationScope>()) {
     return emitOpError("requires an enclosing automatic allocation scope");
   }
 
+  return mlir::success();
+}
+
+mlir::LogicalResult tensorium::LoadOp::verify() {
+  if (mlir::isa<VoidType>(getAddress().getType().getPointeeType()))
+    return emitOpError("cannot load a void object");
+  return mlir::success();
+}
+
+mlir::LogicalResult tensorium::StoreOp::verify() {
+  if (mlir::isa<VoidType>(getAddress().getType().getPointeeType()))
+    return emitOpError("cannot store a void object");
+  return mlir::success();
+}
+
+mlir::LogicalResult tensorium::PtrCastOp::verify() {
+  auto from = getSource().getType().getPointeeType();
+  auto to = getResult().getType().getPointeeType();
+  if (from != to && !mlir::isa<VoidType>(from) && !mlir::isa<VoidType>(to))
+    return emitOpError(
+        "requires identical pointees or a void pointer endpoint");
+  return mlir::success();
+}
+
+mlir::LogicalResult tensorium::PtrOffsetOp::verify() {
+  if (mlir::isa<VoidType>(getBase().getType().getPointeeType()))
+    return emitOpError("cannot offset a void pointer");
+  return mlir::success();
+}
+
+mlir::LogicalResult tensorium::PtrDiffOp::verify() {
+  if (mlir::isa<VoidType>(getLhs().getType().getPointeeType()))
+    return emitOpError("cannot subtract void pointers");
   return mlir::success();
 }
 
@@ -67,7 +102,12 @@ tensorium::GlobalOp::verifySymbolUses(mlir::SymbolTableCollection &symbols) {
     return emitOpError(
         "address initializer references an undefined Tensorium global");
   auto pointer = mlir::dyn_cast<PtrType>(getObjectType());
-  if (!pointer || pointer.getPointeeType() != target.getObjectType())
+  auto pointee = address.getPointeeType(target.getObjectType());
+  if (mlir::failed(pointee))
+    return emitOpError(
+        "address initializer has an invalid or out-of-bounds array path");
+  if (!pointer || (pointer.getPointeeType() != *pointee &&
+                   !mlir::isa<VoidType>(pointer.getPointeeType())))
     return emitOpError("address initializer pointee type does not match the "
                        "referenced global");
   return mlir::success();

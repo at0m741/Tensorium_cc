@@ -32,9 +32,11 @@ C source -> lexer/preprocessor -> parser -> typed AST
 ```
 
 CC1 performs the frontend and optional raw MLIR generation. `tensorium-opt`
-performs project conversions; test scripts use MLIR translation tools and Clang
-for the remaining native steps. There is no integrated CC1 command producing an
-object file or executable yet.
+performs project conversions. In MLIR builds, `cc1` uses the shared native
+driver to orchestrate those tools, LLVM IR translation and Clang compilation/
+linking across translation units. Explicit frontend actions bypass native
+compilation; `tensoriumcc` is an alternate driver command. See
+[the native driver guide](driver.md).
 
 Useful supported inputs include functions using integer calculations, `if`,
 `while`, `for`, local variables, fixed-size arrays and typed pointer operations.
@@ -79,13 +81,13 @@ Primary sources:
 | Automatic declarations and scalar initializers | Supported subset | Includes nested blocks, declaration identity and shadowing. Multiple declarators such as `int a, b;` are not parsed. |
 | `typedef` and basic qualifiers | Supported subset | Typedef resolution and `const` checks exist. `volatile` memory generation is rejected; `restrict` syntax/contracts remain missing. |
 | Function prototypes, definitions and recursion | Supported subset | Direct calls and function symbol canonicalization exist. See the known prototype-binding issue below. |
-| Function results | Broad type checking | CodeGen currently accepts only `int`, `void` and pointers to supported object types as results. |
+| Function results | Supported subset | CodeGen accepts `int`/`unsigned int`, `long`/`unsigned long`, `long long`/`unsigned long long`, `void` and supported pointer results. Narrow integer result ABI attributes and floating results remain missing. |
 | Function pointer declarations and indirect calls | Parsed and checked | Function-pointer types and indirect calls are not generated. |
 | Variadic functions | Parsed and checked | CodeGen rejects variadic declarations. ABI-specific `va_list` and variadic access support are missing. |
 | `inline` and old-style definitions | Missing complete support | C99 inline/linkage rules and old-style function definitions need implementation. |
 | `return`, `if`/`else`, `while`, `for`, `break`, `continue` | Supported subset | Integer and supported pointer conditions are emitted as CFG control flow. Floating conditions are not generated. |
 | `do`/`while`, `switch`/`case`, labels and `goto` | Missing syntax | AST node placeholders do not provide a parser, Sema or CodeGen implementation. |
-| File-scope declarations and initializers | Supported subset | Compatible declarations merge into one symbol; integer constants, null pointers, direct global object addresses and zero-initialized objects lower to LLVM. Address offsets and aggregate initializers remain missing. |
+| File-scope declarations and initializers | Supported subset | Compatible declarations merge into one symbol; integer constants, null pointers, scalar/array addresses, constant pointer offsets and zero-initialized objects lower to LLVM. Aggregate initializers remain missing. |
 | Static local objects | Partial frontend | Persistent storage, initialization and CodeGen remain missing. |
 | Struct/union/enum definitions | Missing syntax | Forward tags exist, but definitions, enumerators and useful member access are unavailable. |
 | Record layout and aggregate ABI | Missing | Field offsets, bit-fields, flexible array members, aggregate copies and native argument/result classification need implementation. |
@@ -106,7 +108,7 @@ Primary sources:
 | Pointer variables and nested pointers | Supported subset | Includes address-taking, rebinding and pointer-valued storage. |
 | Fixed-size arrays and indexing | Supported subset | Includes multidimensional arrays, arrays of pointers and pointers to array rows. Bounds must be positive integer literals after preprocessing. |
 | Pointer arithmetic and differences | Supported subset | Includes integer offsets, pointer `+=`/`-=`, element differences, nulls and supported comparisons. Normal C validity requirements still apply. |
-| `void *` and general pointer casts | Partial frontend | Sema understands object-pointer/void-pointer compatibility, but CodeGen rejects `void *` and requires matching lowered pointer types for its supported conversions. |
+| `void *` and general pointer casts | Supported subset | Object pointers convert to/from void pointers using a typed dialect cast, including storage, globals and native calls. Void dereferences/arithmetic, qualifier drops and general explicit casts remain unsupported. |
 | Read-only parameter SSA bindings | Supported | Parameters that are neither written nor addressed remain entry arguments across CFG control flow. |
 | Initialized local SSA bindings | Supported subset | Non-volatile, unmodified, non-addressed scalar locals can use initializer values directly. Evaluated self-references retain a memory fallback. |
 | Mutable, addressed or uninitialized locals | Supported subset | Retain memory storage. An uninitialized local receives no implicit store. |
@@ -116,7 +118,7 @@ Primary sources:
 | Variable-length arrays | Missing | Runtime extents, dynamic allocation and appropriate scope restoration need implementation. |
 | Explicit lexical lifetime operations | Missing | Entry-block storage placement does not add source lifetime boundaries or protection metadata. |
 | `volatile` and `restrict` semantics | Missing complete support | Volatile memory accesses are rejected by CodeGen; restrict contracts are absent. |
-| Ordinary heap APIs | Partial via typed wrappers | Typed external allocation/release wrappers can be used. Standard `malloc`, `free` and `memcpy` prototypes are blocked by `void *` and related call/conversion gaps. |
+| Ordinary heap APIs | Partial native-call support | The void-pointer ABI barrier is removed; correctly declared external scalar/pointer APIs can use native linkage. SDK headers and broader allocation/library integration still need coverage. |
 | Protected pointers and checked accesses | Planned | MemProtect, bounds/lifetime checks and the protection runtime are not implemented. |
 
 See [the memory contract](memory.md) and
@@ -127,9 +129,9 @@ See [the memory contract](memory.md) and
 | Area | Status | Current behavior or remaining work |
 | --- | --- | --- |
 | Preprocessing | Supported subset | Includes, `-I`, object/function/variadic macros, stringification/token pasting, conditional directives, `#error`, `#pragma once` and selected predefined macros exist. Full translation-phase/directive conformance remains unfinished. |
-| CLI actions | Supported | Default frontend checking, `-E`, token/AST/typed-AST dumps and optional `--emit-mlir`; one source file per invocation. |
-| Driver output modes | Missing | No integrated `-c`, `-S`, `-o`, object/executable output or orchestration of multiple translation units. |
-| Driver configuration | Partial | Include paths and diagnostic color options exist. CLI `-D`, `-U`, `-std`, sysroot and target selection are not exposed. |
+| CLI actions | Supported subset | MLIR-enabled `cc1` defaults to native compilation/linking; `-fsyntax-only`, `-E`, dumps and `--emit-mlir` select a single-TU frontend action. Without MLIR, default checking remains. |
+| Driver output modes | Supported subset | `cc1` (also `tensoriumcc`) provides `-c`, `-S`, `-o`, multi-source native linking, object/archive inputs and `-L`/`-l`. |
+| Driver configuration | Partial | Driver include/library paths, native optimization, verbosity and tool overrides exist. CLI `-D`, `-U`, `-std`, sysroot and target selection remain missing. |
 | Target information | Partial | i386, x86-64 and AArch64 presets and explicit LLVM layout handling exist. CC1 normally selects the host preset; these are not a complete cross-compilation toolchain. |
 | Tensorium-to-LLVM conversion | Supported subset | Converts supported memory, arithmetic, CFG and function operations; explicit valid `llvm.data_layout` is required. |
 | Tensorium-to-MemRef conversion | Compatibility subset | Scalar pointer/storage path with internal signatures and block arguments; general pointer-valued storage and external pointer ABIs are rejected. |
@@ -148,12 +150,14 @@ File-scope objects now use TableGen-defined global/address operations and typed
 linkage attributes. CodeGen merges canonical declarations, emits integer or zero
 initializers, and resolves accesses from functions. The shared AST evaluator
 checks target-width integer arithmetic and rejects signed overflow in its
-supported subset. Direct addresses such as `int *p = &g` use a generated
-symbolic attribute, with symbol/type verification and LLVM address initializers. The function-prototype symbol-binding issue has been fixed.
+supported subset. The AST address evaluator supports direct object addresses,
+array decay, constant pointer offsets and nested indexing, with bounds checks.
+A generated symbolic attribute carries the typed path into LLVM initializer
+regions. The function-prototype symbol-binding issue has been fixed.
 
 Remaining work includes complete C99 constant-expression legality in Sema,
-`sizeof` and other constant operators, array address decay and element offsets,
-aggregate/string initializers, static locals and broader tentative-definition/ABI
+`sizeof` and other constant operators, aggregate/string initializers, static
+locals and broader tentative-definition/ABI
 coverage. [Global fixtures](../Tests/CodeGen/Globals/) now register emission,
 structure, rejection and native execution tests; their latest execution status
 must be checked separately. See [global object support](globals.md).
@@ -190,11 +194,11 @@ must be recorded separately from this source-based inventory.
 
 For the first practical multi-file C project:
 
-1. Extend global-object constant checking, address and aggregate initializers,
+1. Extend global-object constant checking and aggregate initializers,
    including canonical symbols, initialization, reads/writes and linkage cases.
 2. Implement missing integer operators and lazy logical/conditional evaluation.
 3. Generate character/string literals and common array initialization forms.
-4. Add an object/executable driver around the existing LLVM/platform tools.
+4. Extend the native driver with SDK/system include discovery and common build flags.
 5. Implement basic records, layout, member access and initialization.
 6. Extend pointer conversions, function signatures and library-call compatibility.
 
