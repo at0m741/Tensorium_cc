@@ -2,7 +2,8 @@
 
 The normal frontend pipeline is `Lexer -> Preprocessor -> Parser -> Sema`.
 `Sema::analyze(TranslationUnit&)` returns true only if semantic analysis finishes
-without errors. The CLI runs this pipeline by default. `--dump-ast` stops after
+without errors. The CLI runs this pipeline for `-fsyntax-only`, explicit frontend actions,
+and each source compiled through the native driver. `--dump-ast` stops after
 parsing; `--dump-sema` prints the typed, converted AST after successful Sema.
 Neither mode prints a partial AST after an error in its pipeline.
 

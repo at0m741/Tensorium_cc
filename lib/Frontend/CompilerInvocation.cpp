@@ -12,6 +12,7 @@ bool parseCompilerInvocation(int argc, char **argv,
   bool dumpSema = false;
   bool preprocessOnly = false;
   bool emitMlir = false;
+  bool syntaxOnly = false;
   std::vector<std::string> includeDirs;
   const char *filename = nullptr;
   bool options = true;
@@ -23,6 +24,8 @@ bool parseCompilerInvocation(int argc, char **argv,
       color = DiagnosticColor::Always;
     } else if (options && arg == "-fno-color-diagnostics") {
       color = DiagnosticColor::Never;
+    } else if (options && arg == "-fsyntax-only") {
+      syntaxOnly = true;
     } else if (options && arg == "--dump-tokens") {
       dumpTokens = true;
     } else if (options && arg == "--dump-ast") {
@@ -64,20 +67,23 @@ bool parseCompilerInvocation(int argc, char **argv,
     diagnostics.error({}, "no input file");
     diagnosticOutput
         << "usage: cc1 "
-           "[-E|--dump-tokens|--dump-ast|--dump-sema|--emit-mlir] [-I "
+           "[-fsyntax-only|-E|--dump-tokens|--dump-ast|--dump-sema|--emit-mlir]"
+           " [-I "
            "directory] "
            "[-fcolor-diagnostics|-fno-color-diagnostics] <file.c>\n";
     return false;
   }
 
   if (static_cast<int>(dumpTokens) + static_cast<int>(dumpAst) +
-          static_cast<int>(dumpSema) + static_cast<int>(emitMlir) >
+          static_cast<int>(dumpSema) + static_cast<int>(emitMlir) +
+          static_cast<int>(syntaxOnly) >
       1) {
     DiagnosticEngine diagnostics("cc1", "", diagnosticOutput, color);
     diagnostics.error({}, "output options cannot be combined");
     return false;
   }
-  if (preprocessOnly && (dumpTokens || dumpAst || dumpSema || emitMlir)) {
+  if (preprocessOnly &&
+      (dumpTokens || dumpAst || dumpSema || emitMlir || syntaxOnly)) {
     DiagnosticEngine diagnostics("cc1", "", diagnosticOutput, color);
     diagnostics.error({}, "-E cannot be combined with another output option");
     return false;

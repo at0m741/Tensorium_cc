@@ -32,9 +32,11 @@ C source -> lexer/preprocessor -> parser -> typed AST
 ```
 
 CC1 performs the frontend and optional raw MLIR generation. `tensorium-opt`
-performs project conversions; test scripts use MLIR translation tools and Clang
-for the remaining native steps. There is no integrated CC1 command producing an
-object file or executable yet.
+performs project conversions. In MLIR builds, `cc1` uses the shared native
+driver to orchestrate those tools, LLVM IR translation and Clang compilation/
+linking across translation units. Explicit frontend actions bypass native
+compilation; `tensoriumcc` is an alternate driver command. See
+[the native driver guide](driver.md).
 
 Useful supported inputs include functions using integer calculations, `if`,
 `while`, `for`, local variables, fixed-size arrays and typed pointer operations.
@@ -127,9 +129,9 @@ See [the memory contract](memory.md) and
 | Area | Status | Current behavior or remaining work |
 | --- | --- | --- |
 | Preprocessing | Supported subset | Includes, `-I`, object/function/variadic macros, stringification/token pasting, conditional directives, `#error`, `#pragma once` and selected predefined macros exist. Full translation-phase/directive conformance remains unfinished. |
-| CLI actions | Supported | Default frontend checking, `-E`, token/AST/typed-AST dumps and optional `--emit-mlir`; one source file per invocation. |
-| Driver output modes | Missing | No integrated `-c`, `-S`, `-o`, object/executable output or orchestration of multiple translation units. |
-| Driver configuration | Partial | Include paths and diagnostic color options exist. CLI `-D`, `-U`, `-std`, sysroot and target selection are not exposed. |
+| CLI actions | Supported subset | MLIR-enabled `cc1` defaults to native compilation/linking; `-fsyntax-only`, `-E`, dumps and `--emit-mlir` select a single-TU frontend action. Without MLIR, default checking remains. |
+| Driver output modes | Supported subset | `cc1` (also `tensoriumcc`) provides `-c`, `-S`, `-o`, multi-source native linking, object/archive inputs and `-L`/`-l`. |
+| Driver configuration | Partial | Driver include/library paths, native optimization, verbosity and tool overrides exist. CLI `-D`, `-U`, `-std`, sysroot and target selection remain missing. |
 | Target information | Partial | i386, x86-64 and AArch64 presets and explicit LLVM layout handling exist. CC1 normally selects the host preset; these are not a complete cross-compilation toolchain. |
 | Tensorium-to-LLVM conversion | Supported subset | Converts supported memory, arithmetic, CFG and function operations; explicit valid `llvm.data_layout` is required. |
 | Tensorium-to-MemRef conversion | Compatibility subset | Scalar pointer/storage path with internal signatures and block arguments; general pointer-valued storage and external pointer ABIs are rejected. |
@@ -194,7 +196,7 @@ For the first practical multi-file C project:
    including canonical symbols, initialization, reads/writes and linkage cases.
 2. Implement missing integer operators and lazy logical/conditional evaluation.
 3. Generate character/string literals and common array initialization forms.
-4. Add an object/executable driver around the existing LLVM/platform tools.
+4. Extend the native driver with SDK/system include discovery and common build flags.
 5. Implement basic records, layout, member access and initialization.
 6. Extend pointer conversions, function signatures and library-call compatibility.
 

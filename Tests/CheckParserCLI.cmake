@@ -8,7 +8,7 @@ elseif(DUMP_AST)
 endif()
 
 execute_process(
-  COMMAND "${CC1}" -fno-color-diagnostics ${MODE_OPTION} "${SOURCE}"
+  COMMAND "${CC1}" -cc1 -fno-color-diagnostics ${MODE_OPTION} "${SOURCE}"
   RESULT_VARIABLE STATUS
   OUTPUT_VARIABLE OUTPUT
   ERROR_VARIABLE DIAGNOSTIC

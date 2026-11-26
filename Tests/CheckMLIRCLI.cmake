@@ -7,7 +7,7 @@ file(WRITE "${SCRATCH_DIR}/locals.c" "int add(int a, int b) { return a + b; }\ni
 
 function(run_case expected_status)
   execute_process(
-    COMMAND "${CC1}" -fno-color-diagnostics ${ARGN}
+    COMMAND "${CC1}" -cc1 -fno-color-diagnostics ${ARGN}
     WORKING_DIRECTORY "${SCRATCH_DIR}"
     RESULT_VARIABLE STATUS OUTPUT_VARIABLE OUTPUT ERROR_VARIABLE DIAGNOSTIC
     TIMEOUT 4
@@ -19,7 +19,7 @@ function(run_case expected_status)
   set(DIAGNOSTIC "${DIAGNOSTIC}" PARENT_SCOPE)
 endfunction()
 
-# Enabling the backend at build time must not enable emission for ordinary inputs.
+# Internal frontend invocations check syntax without native emission.
 foreach(SOURCE IN ITEMS empty.c valid.c locals.c)
   run_case(0 "${SOURCE}")
   if(NOT "${OUTPUT}" STREQUAL "" OR NOT "${DIAGNOSTIC}" STREQUAL "")

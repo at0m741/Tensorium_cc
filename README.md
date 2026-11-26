@@ -29,6 +29,21 @@ ctest --test-dir build-mlir --output-on-failure
 build-mlir/cc1 --emit-mlir Tests/function_body.c
 ```
 
+In MLIR builds, `cc1` uses the native compiler driver by default. It accepts `-c`, `-S`,
+`-o`, include paths, multiple C sources, objects and static libraries:
+
+```sh
+build-mlir/cc1 -I Tests/Driver/fixtures/include \
+  Tests/Driver/fixtures/main.c Tests/Driver/fixtures/helper.c \
+  -o /tmp/tensorium-program
+/tmp/tensorium-program
+```
+
+See [the native driver guide](docs/driver.md) for tool discovery, supported flags
+and current limitations. Use `cc1 -fsyntax-only` for semantic checking; explicit
+dumps, `-E` and `--emit-mlir` remain frontend actions. `tensoriumcc` is an
+alternate native driver executable.
+
 `--emit-mlir` emits Tensorium memory operations alongside `arith`, `cf` and
 `func`. For C object memory, including stored pointers and fixed-size arrays,
 lower directly to LLVM using the target layout recorded by CC1:

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22)
 file(MAKE_DIRECTORY "${SCRATCH_DIR}")
 
 function(run_case expected_status)
-  execute_process(COMMAND "${CC1}" -fno-color-diagnostics ${ARGN}
+  execute_process(COMMAND "${CC1}" -cc1 -fno-color-diagnostics ${ARGN}
     RESULT_VARIABLE STATUS OUTPUT_VARIABLE OUTPUT ERROR_VARIABLE DIAGNOSTIC TIMEOUT 4)
   if(NOT "${STATUS}" STREQUAL "${expected_status}")
     message(FATAL_ERROR "Expected status ${expected_status}, got ${STATUS}: ${ARGN}\n${DIAGNOSTIC}")
