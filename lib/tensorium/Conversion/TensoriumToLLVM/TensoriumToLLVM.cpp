@@ -97,6 +97,9 @@ template <typename Op> struct MemoryLowering : OpConversionPattern<Op> {
           rewriter, loc, converter->convertType(op.getResult().getType()),
           op.getNameAttr());
       rewriter.replaceOp(op, address.getResult());
+    } else if constexpr (std::is_same_v<Op, tensorium::PtrCastOp>) {
+      // Tensorium object and void pointers share LLVM's opaque pointer type.
+      rewriter.replaceOp(op, adaptor.getSource());
     } else if constexpr (std::is_same_v<Op, tensorium::LoadOp>) {
       auto load = createOp<LLVM::LoadOp>(
           rewriter, loc, converter->convertType(op.getResult().getType()),
@@ -222,6 +225,7 @@ struct TensoriumToLLVMPass
     RewritePatternSet patterns(&getContext());
     patterns.add<
         MemoryLowering<tensorium::GlobalOp>,
+        MemoryLowering<tensorium::PtrCastOp>,
         MemoryLowering<tensorium::GetGlobalOp>,
         MemoryLowering<tensorium::AllocaOp>, MemoryLowering<tensorium::LoadOp>,
         MemoryLowering<tensorium::StoreOp>, MemoryLowering<tensorium::NullOp>,

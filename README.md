@@ -44,6 +44,16 @@ and current limitations. Use `cc1 -fsyntax-only` for semantic checking; explicit
 dumps, `-E` and `--emit-mlir` remain frontend actions. `tensoriumcc` is an
 alternate native driver executable.
 
+A first terminal-output example uses native `write` with a byte buffer:
+
+```sh
+build-mlir/cc1 Tests/Driver/fixtures/write.c -o /tmp/write-example
+/tmp/write-example
+```
+
+This example uses a manual LP64 POSIX declaration; SDK headers and string-literal
+emission remain unfinished. See [the write example](docs/driver.md#native-write-example).
+
 `--emit-mlir` emits Tensorium memory operations alongside `arith`, `cf` and
 `func`. For C object memory, including stored pointers and fixed-size arrays,
 lower directly to LLVM using the target layout recorded by CC1:

@@ -124,6 +124,24 @@ Outputs that alias an explicit input, including symlink/hard-link aliases, are
 rejected. The first failed subprocess stops the pipeline and its positive exit
 status is propagated; execution failures/signals produce a nonzero driver error.
 
+## Native write example
+
+The [write fixture](../Tests/Driver/fixtures/write.c) declares the POSIX LP64
+signature manually, fills a three-byte local array using integer assignments,
+and calls the system `write` through ordinary native linkage:
+
+```sh
+build-mlir/cc1 Tests/Driver/fixtures/write.c -o /tmp/write-example
+/tmp/write-example
+```
+
+The program writes `Hi` followed by a newline. It checks the byte count, the
+signed `-1` result for an invalid descriptor and a zero-length write with a null
+buffer. CTest runs this fixture through both driver commands at `-O0` and `-O2`
+on native 64-bit POSIX hosts. No printf, variadic ABI, string-literal CodeGen or
+SDK headers are required for this example. The manual typedefs describe LP64
+POSIX targets; automatic system-header integration remains future work.
+
 ## Scope and validation
 
 This is a native host-target driver. Cross-target selection, sysroot and SDK

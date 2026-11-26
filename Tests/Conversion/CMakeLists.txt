@@ -43,3 +43,13 @@ tensorium_add_llvm_fixture(global_address_missing 1 "address initializer referen
 tensorium_add_llvm_fixture(global_address_type 1 "address initializer pointee type does not match")
 tensorium_add_llvm_fixture(global_address_nonpointer 1 "address initializer requires a pointer object")
 tensorium_add_llvm_fixture(global_address_function 1 "address initializer references an undefined Tensorium global")
+
+tensorium_add_llvm_fixture(void_pointer32 0)
+tensorium_add_llvm_fixture(void_pointer64 0)
+tensorium_add_llvm_fixture(void_alloca 1 "cannot allocate a void object")
+tensorium_add_llvm_fixture(void_load 1 "cannot load a void object")
+tensorium_add_llvm_fixture(void_store 1 "cannot store a void object")
+tensorium_add_llvm_fixture(void_offset 1 "cannot offset a void pointer")
+tensorium_add_llvm_fixture(void_difference 1 "cannot subtract void pointers")
+tensorium_add_llvm_fixture(invalid_pointer_cast 1 "identical pointees or a void pointer endpoint")
+tensorium_add_llvm_fixture(void_array 1 "expected a supported array element type")

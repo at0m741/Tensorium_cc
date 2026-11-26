@@ -206,6 +206,13 @@ class Tests:
         self.driver(self.source("standalone.c"), "-o", "--emit-mlir")
         self.run([self.directory / "--emit-mlir"])
 
+    def write(self):
+        for optimization in ("-O0", "-O2"):
+            self.driver(optimization, self.source("write.c"), "-o", "write-program")
+            result = self.run([self.directory / "write-program"])
+            assert result.stdout == "Hi\n", result.stdout
+            assert result.stderr == "", result.stderr
+
     def sibling_tools(self):
         # No tool overrides: exercise sibling cc1/optimizer and configured tools.
         result = self.driver("-v", self.source("standalone.c"), "-o", "sibling", configured=False)

@@ -52,6 +52,7 @@ def Tensorium_LoadOp : Tensorium_Op<"load", [
   let results = (outs AnyType:$result);
 
   let assemblyFormat = "$address attr-dict `:` type($address)";
+  let hasVerifier = 1;
 }
 
 def Tensorium_StoreOp : Tensorium_Op<"store", [
@@ -80,6 +81,21 @@ def Tensorium_StoreOp : Tensorium_Op<"store", [
 
   let assemblyFormat =
       "$value `,` $address attr-dict `:` type($address)";
+  let hasVerifier = 1;
+}
+
+def Tensorium_PtrCastOp : Tensorium_Op<"ptr_cast", [Pure]> {
+  let summary = "Convert between typed object pointers and void pointers";
+  let description = [{
+    Preserves the address and performs no memory access. The pointer types must
+    be identical, or one pointee must be void. Both use the same native address
+    space and pointer representation. The caller remains responsible for object
+    lifetime, alignment and valid access through a recovered typed pointer.
+  }];
+  let arguments = (ins Tensorium_PtrType:$source);
+  let results = (outs Tensorium_PtrType:$result);
+  let assemblyFormat = "$source attr-dict `:` type($source) `->` type($result)";
+  let hasVerifier = 1;
 }
 
 def Tensorium_PtrOffsetOp : Tensorium_Op<"ptr_offset", [Pure,
@@ -94,6 +110,7 @@ def Tensorium_PtrOffsetOp : Tensorium_Op<"ptr_offset", [Pure,
   let arguments = (ins Tensorium_PtrType:$base, AnySignlessInteger:$offset);
   let results = (outs Tensorium_PtrType:$result);
   let assemblyFormat = "$base `[` $offset `]` attr-dict `:` type($base) `,` type($offset)";
+  let hasVerifier = 1;
 }
 
 def Tensorium_ArrayDecayOp : Tensorium_Op<"array_decay", [Pure]> {
@@ -127,6 +144,7 @@ def Tensorium_PtrDiffOp : Tensorium_Op<"ptr_diff", [Pure, SameTypeOperands]> {
   let arguments = (ins Tensorium_PtrType:$lhs, Tensorium_PtrType:$rhs);
   let results = (outs AnySignlessInteger:$result);
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($lhs) `->` type($result)";
+  let hasVerifier = 1;
 }
 
 #endif

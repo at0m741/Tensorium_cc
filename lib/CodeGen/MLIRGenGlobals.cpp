@@ -64,7 +64,8 @@ mlir::LogicalResult MLIRGen::emitGlobals(const TranslationUnit &unit) {
         auto object = lowerType(*referenced->second->type, var.init->loc);
         if (!object)
           return mlir::failure();
-        if (mlir::cast<tensorium::PtrType>(type).getPointeeType() != object) {
+        auto pointee = mlir::cast<tensorium::PtrType>(type).getPointeeType();
+        if (pointee != object && !mlir::isa<tensorium::VoidType>(pointee)) {
           diag.error(
               var.init->loc,
               "global address initializer requires matching object types");

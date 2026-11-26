@@ -21,7 +21,9 @@ namespace {
 
 void typesRoundTrip(mlir::MLIRContext &context) {
   for (const char *text : {"!tensorium.ptr<i32>", "!tensorium.ptr<f64>",
-                           "!tensorium.ptr<!tensorium.ptr<i32>>"}) {
+                           "!tensorium.ptr<!tensorium.ptr<i32>>",
+                           "!tensorium.ptr<!tensorium.void>",
+                           "!tensorium.ptr<!tensorium.ptr<!tensorium.void>>"}) {
     auto type = mlir::parseType(text, &context);
     EXPECT(type && mlir::isa<tensorium::PtrType>(type));
     std::string output;

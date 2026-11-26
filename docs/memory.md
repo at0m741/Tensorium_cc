@@ -18,7 +18,10 @@ memory uses the `tensorium_to_llvm` library and the
   pre/post increment/decrement, integer `+=`/`-=`/`*=`, and `sizeof` for supported
   complete objects. Compound assignments evaluate their address once, compute
   in the promoted type and convert the stored/result value back to the object type.
-- Ordinary native pointer parameters and results at external function calls.
+- Ordinary native pointer parameters and results at external function calls,
+  including object-pointer conversions to/from `void *`.
+- Native `int`, unsigned int, long, unsigned long, long long and unsigned long
+  long function results. Narrow integer return ABI extensions remain unfinished.
 
 Floating-point storage is supported by the dialect and lowering; the existing
 frontend's floating-point expressions/conversions remain limited. Division,
@@ -26,13 +29,15 @@ remainder and bitwise/shift compound assignments retain their previous limits.
 Array bounds must currently be positive integer literals, as required by the
 parser. Arrays are filled by assignments; brace/string aggregate initializers
 and variable-length arrays are not implemented. Neither are structs/unions,
-global/static object generation, function pointers, general pointer casts,
-`void *`, volatile or atomic accesses, or protected pointers.
+static local storage, function pointers, general explicit pointer casts,
+volatile or atomic accesses, or protected pointers. File-scope object support is
+described in [global objects](globals.md).
 This milestone does not claim complete C memory support.
 
-Ordinary `malloc`/`free` and memory-library prototypes are currently blocked by
-their `void *` types. Typed external allocation/release wrappers can already be
-compiled and used; the compiler does not need its own allocator for that path.
+Native object/void-pointer boundaries are supported with correctly declared
+external functions. This removes the previous `void *` barrier to ordinary
+allocation/release interfaces; full SDK-header and hosted-library integration
+remain incomplete. Native allocation does not require a compiler-owned allocator.
 Heap allocation tracking and protection metadata are not implemented.
 
 ## SSA bindings and automatic storage
@@ -80,10 +85,9 @@ save/restore. VLAs remain unsupported. Hand-written Tensorium IR may still put
 an `alloca` inside a loop; the operation retains its per-execution semantics and
 the LLVM conversion does not perform this frontend placement policy.
 
-Global initializer expressions can now be parsed and type-checked, but global
-constant-expression checks and object generation are still in progress. This
-does not enable global storage in `--emit-mlir`. See
-[the frontend status](sema.md#file-scope-objects-in-progress).
+Supported file-scope objects and static address initializers are described in
+[global object support](globals.md). Complete C99 static-initializer checking
+remains unfinished.
 
 ## IR and representation
 
@@ -97,6 +101,15 @@ scalar objects. `tensorium.ptr_offset` advances by a signed number of pointee
 objects, using the complete object stride, including array rows. CC1 extends
 signed/unsigned indices appropriately to the compilation target's pointer width
 before emitting offsets. The lowering does not add LLVM `inbounds` promises.
+
+`!tensorium.void` is an incomplete pointee marker inside
+`!tensorium.ptr<!tensorium.void>`. It has no allocation stride and cannot be a
+standalone stored/loaded object or array element. `tensorium.ptr_cast` preserves
+the address between identical pointer types or when one endpoint is a void
+pointer. LLVM lowering erases this conversion because both pointers share the
+opaque native representation. Pointer-valued objects containing void pointers
+remain complete objects and support ordinary storage. The scalar MemRef
+compatibility path still rejects opaque pointees.
 
 `tensorium.null` produces a typed null. `tensorium.ptr_cmp` supports `eq`, `ne`,
 `ult`, `ule`, `ugt`, `uge` and requires matching pointer types.

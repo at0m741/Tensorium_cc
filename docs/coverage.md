@@ -81,7 +81,7 @@ Primary sources:
 | Automatic declarations and scalar initializers | Supported subset | Includes nested blocks, declaration identity and shadowing. Multiple declarators such as `int a, b;` are not parsed. |
 | `typedef` and basic qualifiers | Supported subset | Typedef resolution and `const` checks exist. `volatile` memory generation is rejected; `restrict` syntax/contracts remain missing. |
 | Function prototypes, definitions and recursion | Supported subset | Direct calls and function symbol canonicalization exist. See the known prototype-binding issue below. |
-| Function results | Broad type checking | CodeGen currently accepts only `int`, `void` and pointers to supported object types as results. |
+| Function results | Supported subset | CodeGen accepts `int`/`unsigned int`, `long`/`unsigned long`, `long long`/`unsigned long long`, `void` and supported pointer results. Narrow integer result ABI attributes and floating results remain missing. |
 | Function pointer declarations and indirect calls | Parsed and checked | Function-pointer types and indirect calls are not generated. |
 | Variadic functions | Parsed and checked | CodeGen rejects variadic declarations. ABI-specific `va_list` and variadic access support are missing. |
 | `inline` and old-style definitions | Missing complete support | C99 inline/linkage rules and old-style function definitions need implementation. |
@@ -108,7 +108,7 @@ Primary sources:
 | Pointer variables and nested pointers | Supported subset | Includes address-taking, rebinding and pointer-valued storage. |
 | Fixed-size arrays and indexing | Supported subset | Includes multidimensional arrays, arrays of pointers and pointers to array rows. Bounds must be positive integer literals after preprocessing. |
 | Pointer arithmetic and differences | Supported subset | Includes integer offsets, pointer `+=`/`-=`, element differences, nulls and supported comparisons. Normal C validity requirements still apply. |
-| `void *` and general pointer casts | Partial frontend | Sema understands object-pointer/void-pointer compatibility, but CodeGen rejects `void *` and requires matching lowered pointer types for its supported conversions. |
+| `void *` and general pointer casts | Supported subset | Object pointers convert to/from void pointers using a typed dialect cast, including storage, globals and native calls. Void dereferences/arithmetic, qualifier drops and general explicit casts remain unsupported. |
 | Read-only parameter SSA bindings | Supported | Parameters that are neither written nor addressed remain entry arguments across CFG control flow. |
 | Initialized local SSA bindings | Supported subset | Non-volatile, unmodified, non-addressed scalar locals can use initializer values directly. Evaluated self-references retain a memory fallback. |
 | Mutable, addressed or uninitialized locals | Supported subset | Retain memory storage. An uninitialized local receives no implicit store. |
@@ -118,7 +118,7 @@ Primary sources:
 | Variable-length arrays | Missing | Runtime extents, dynamic allocation and appropriate scope restoration need implementation. |
 | Explicit lexical lifetime operations | Missing | Entry-block storage placement does not add source lifetime boundaries or protection metadata. |
 | `volatile` and `restrict` semantics | Missing complete support | Volatile memory accesses are rejected by CodeGen; restrict contracts are absent. |
-| Ordinary heap APIs | Partial via typed wrappers | Typed external allocation/release wrappers can be used. Standard `malloc`, `free` and `memcpy` prototypes are blocked by `void *` and related call/conversion gaps. |
+| Ordinary heap APIs | Partial native-call support | The void-pointer ABI barrier is removed; correctly declared external scalar/pointer APIs can use native linkage. SDK headers and broader allocation/library integration still need coverage. |
 | Protected pointers and checked accesses | Planned | MemProtect, bounds/lifetime checks and the protection runtime are not implemented. |
 
 See [the memory contract](memory.md) and

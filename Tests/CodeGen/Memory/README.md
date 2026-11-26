@@ -11,7 +11,13 @@ and evaluation of the left-hand address exactly once.
 Clang. Calls cross the boundary in both directions and check pointer arguments,
 pointer results and writes through `int **`.
 
-`invalid/` retains the currently rejected cases: `void *`, volatile accesses
+`void_pointer.c` exercises erasure/recovery of object pointers, void-pointer
+storage, globals and qualifier-preserving conversions. `void_pointer_external.c`
+and its native helper test both directions of calls and full-width integer
+results. `integer_returns.c` covers the supported signed/unsigned return types.
+
+`invalid/` retains void-pointer arithmetic/dereference, qualifier-discarding
+conversions, narrow integer returns awaiting ABI attributes, volatile accesses
 and writes through `const`. Previous restrictions on pointer-valued storage
 are now covered by valid programs that execute as native code.
 

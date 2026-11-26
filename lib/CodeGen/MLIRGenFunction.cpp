@@ -130,9 +130,12 @@ mlir::LogicalResult MLIRGen::emitCall(const CallExpr &call,
 }
 
 mlir::LogicalResult MLIRGen::declareFunction(const FuncDecl &function) {
-  if (function.type->variadic || (function.type->retType->kind != Type::INT &&
-                                  !function.type->retType->isVoid() &&
-                                  !function.type->retType->isPointer())) {
+  const auto kind = function.type->retType->kind;
+  // Small integer returns require additional native ABI extension attributes.
+  const bool integerReturn = kind >= Type::INT && kind <= Type::ULONGLONG;
+  if (function.type->variadic ||
+      (!integerReturn && !function.type->retType->isVoid() &&
+       !function.type->retType->isPointer())) {
     diag.error(function.loc, "MLIR generation is not implemented "
                              "for this declaration yet");
     return mlir::failure();
