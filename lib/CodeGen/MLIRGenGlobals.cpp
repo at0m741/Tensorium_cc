@@ -59,7 +59,7 @@ mlir::LogicalResult MLIRGen::emitGlobals(const TranslationUnit &unit) {
     }
     const bool internal =
         static_cast<const VarDecl *>(key)->sc == StorageClass::STATIC;
-    tensorium::createOp<tensorium::GlobalOp>(
+    auto global = tensorium::createOp<tensorium::GlobalOp>(
         builder, builder.getUnknownLoc(), builder.getStringAttr(var.name),
         mlir::TypeAttr::get(type),
         tensorium::GlobalLinkageAttr::get(
@@ -68,6 +68,9 @@ mlir::LogicalResult MLIRGen::emitGlobals(const TranslationUnit &unit) {
                                       : tensorium::GlobalLinkage::external),
         initial,
         var.type->quals.isConst ? builder.getUnitAttr() : mlir::UnitAttr{});
+    // MLIR declarations are private symbols; native linkage stays external.
+    if (!initial)
+      global.setVisibility(mlir::SymbolTable::Visibility::Private);
   }
   return mlir::success();
 }

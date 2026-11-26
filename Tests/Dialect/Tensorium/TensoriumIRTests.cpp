@@ -2,9 +2,11 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Diagnostics.h"
+#include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "tensorium/Dialect/Tensorium/IR/TensoriumDialect.h"
 #include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
+#include "tensorium/Support/Builders.h"
 #include "llvm/Support/raw_ostream.h"
 #include <iostream>
 #include <stdexcept>
@@ -85,6 +87,35 @@ void checksMemoryEffects(mlir::MLIRContext &context) {
   EXPECT(mlir::parseSourceString<mlir::ModuleOp>(text, &context));
 }
 
+void checksGlobalSymbolVisibility(mlir::MLIRContext &context) {
+  mlir::OpBuilder builder(&context);
+  auto loc = builder.getUnknownLoc();
+  mlir::OwningOpRef<mlir::ModuleOp> module(mlir::ModuleOp::create(loc));
+  builder.setInsertionPointToEnd(module->getBody());
+  auto global = tensorium::createOp<tensorium::GlobalOp>(
+      builder, loc, builder.getStringAttr("external_object"),
+      mlir::TypeAttr::get(builder.getI32Type()),
+      tensorium::GlobalLinkageAttr::get(&context,
+                                        tensorium::GlobalLinkage::external),
+      mlir::Attribute{}, mlir::UnitAttr{});
+  auto symbol = mlir::cast<mlir::SymbolOpInterface>(global.getOperation());
+  using Visibility = mlir::SymbolTable::Visibility;
+  global.setVisibility(Visibility::Private);
+  EXPECT(symbol.isDeclaration());
+  EXPECT(symbol.getVisibility() == Visibility::Private);
+  EXPECT(mlir::succeeded(mlir::verify(module.get())));
+  for (auto visibility :
+       {Visibility::Private, Visibility::Nested, Visibility::Public}) {
+    mlir::SymbolTable::setSymbolVisibility(global, visibility);
+    EXPECT(global.getVisibility() == visibility);
+    EXPECT(symbol.getVisibility() == visibility);
+    EXPECT(mlir::SymbolTable::getSymbolVisibility(global) == visibility);
+  }
+  EXPECT(!global->hasAttr("sym_visibility"));
+  global.setVisibility(Visibility::Private);
+  EXPECT(mlir::succeeded(mlir::verify(module.get())));
+}
+
 void rejectsInvalidMemoryIR(mlir::MLIRContext &context) {
   const char *cases[] = {
       "module { %p = tensorium.alloca : !tensorium.ptr<i32> }",
@@ -122,6 +153,7 @@ int main() {
     EXPECT(dialect == context.getOrLoadDialect<tensorium::TensoriumDialect>());
     typesRoundTrip(context);
     checksMemoryEffects(context);
+    checksGlobalSymbolVisibility(context);
     rejectsInvalidMemoryIR(context);
     std::cout << "Tensorium IR tests passed\n";
   } catch (const std::exception &error) {

@@ -9,6 +9,8 @@ def Tensorium_GlobalOp : Tensorium_Op<"global", [Symbol]> {
     object with that value. Internal linkage requires a definition.
     Writing through a pointer to a constant definition is undefined.
     Linkage describes native linkage, independently of MLIR symbol visibility.
+    Declarations require non-public MLIR symbol visibility, normally private,
+    even when their native linkage is external.
   }];
   let arguments = (ins SymbolNameAttr:$sym_name, TypeAttr:$object_type,
     Tensorium_GlobalLinkage:$linkage, OptionalAttr<AnyAttr>:$initial_value,
@@ -17,10 +19,24 @@ def Tensorium_GlobalOp : Tensorium_Op<"global", [Symbol]> {
   let extraClassDeclaration = [{
     ::mlir::StringAttr getNameAttr() { return getSymNameAttr(); }
     ::mlir::SymbolTable::Visibility getVisibility() {
-      return ::mlir::SymbolTable::getSymbolVisibility(getOperation());
+      // SymbolTable dispatches through this interface: read storage directly.
+      auto attr = (*this)->getAttrOfType<::mlir::StringAttr>(
+          "sym_visibility");
+      if (!attr || attr.getValue() == "public")
+        return ::mlir::SymbolTable::Visibility::Public;
+      return attr.getValue() == "private"
+          ? ::mlir::SymbolTable::Visibility::Private
+          : ::mlir::SymbolTable::Visibility::Nested;
     }
     void setVisibility(::mlir::SymbolTable::Visibility visibility) {
-      ::mlir::SymbolTable::setSymbolVisibility(getOperation(), visibility);
+      auto name = "sym_visibility";
+      if (visibility == ::mlir::SymbolTable::Visibility::Public) {
+        (*this)->removeAttr(name);
+        return;
+      }
+      (*this)->setAttr(name, ::mlir::StringAttr::get(getContext(),
+          visibility == ::mlir::SymbolTable::Visibility::Private
+              ? "private" : "nested"));
     }
     bool isDeclaration() { return !getInitialValue(); }
   }];

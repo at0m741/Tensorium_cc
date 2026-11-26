@@ -29,6 +29,9 @@ relationships use C++ verifiers. Native conversion remains in
 - Compatible file-scope declarations and tentative definitions share one symbol.
   An initialized definition takes precedence over tentative definitions and
   `extern` declarations. Duplicate initialized definitions are diagnosed.
+- External declarations use private MLIR symbol visibility, as required by
+  `SymbolOpInterface`. This does not make the native object internal: its
+  Tensorium linkage remains external and the linker resolves the object.
 - Internal (`static`) and external object linkage are preserved independently
   of MLIR symbol visibility. Tentative definitions become zero definitions in
   their translation unit, using strong external linkage rather than common symbols.
@@ -48,7 +51,7 @@ Example raw IR:
 module attributes {llvm.data_layout = "e-p:64:64"} {
   tensorium.global external @counter : i32 {initial_value = 3 : i32}
   tensorium.global internal @zero : i32 {initial_value = unit}
-  tensorium.global external @provided_elsewhere : i32
+  tensorium.global external @provided_elsewhere : i32 {sym_visibility = "private"}
   func.func @read() -> i32 {
     %p = tensorium.get_global @counter : !tensorium.ptr<i32>
     %v = tensorium.load %p : !tensorium.ptr<i32>
