@@ -33,6 +33,20 @@ if(SOURCE MATCHES "global_address(32|64)\\.mlir$")
     message(FATAL_ERROR "Expected symbolic LLVM address initializers: ${OUTPUT}")
   endif()
 endif()
+if(SOURCE MATCHES "global_array_address(32|64|mixed)\\.mlir$")
+  if(CMAKE_MATCH_1 STREQUAL "64")
+    set(INDEX_BITS 64)
+  else()
+    set(INDEX_BITS 32)
+  endif()
+  if(NOT OUTPUT MATCHES "llvm.getelementptr" OR
+     NOT OUTPUT MATCHES "llvm.mlir.constant\\(2 : i${INDEX_BITS}\\)" OR
+     NOT OUTPUT MATCHES "llvm.mlir.addressof @values" OR
+     NOT OUTPUT MATCHES "llvm.mlir.addressof @matrix" OR
+     OUTPUT MATCHES "llvm.store|llvm.ptrtoint")
+    message(FATAL_ERROR "Incorrect typed global array address lowering: ${OUTPUT}")
+  endif()
+endif()
 file(MAKE_DIRECTORY "${SCRATCH_DIR}")
 file(WRITE "${SCRATCH_DIR}/lowered.mlir" "${OUTPUT}")
 execute_process(

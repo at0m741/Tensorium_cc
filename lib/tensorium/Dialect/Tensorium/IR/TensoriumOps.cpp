@@ -102,7 +102,11 @@ tensorium::GlobalOp::verifySymbolUses(mlir::SymbolTableCollection &symbols) {
     return emitOpError(
         "address initializer references an undefined Tensorium global");
   auto pointer = mlir::dyn_cast<PtrType>(getObjectType());
-  if (!pointer || (pointer.getPointeeType() != target.getObjectType() &&
+  auto pointee = address.getPointeeType(target.getObjectType());
+  if (mlir::failed(pointee))
+    return emitOpError(
+        "address initializer has an invalid or out-of-bounds array path");
+  if (!pointer || (pointer.getPointeeType() != *pointee &&
                    !mlir::isa<VoidType>(pointer.getPointeeType())))
     return emitOpError("address initializer pointee type does not match the "
                        "referenced global");

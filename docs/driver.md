@@ -142,6 +142,11 @@ on native 64-bit POSIX hosts. No printf, variadic ABI, string-literal CodeGen or
 SDK headers are required for this example. The manual typedefs describe LP64
 POSIX targets; automatic system-header integration remains future work.
 
+The [global-array write fixture](../Tests/Driver/fixtures/write_global_array.c)
+combines static array slices and nested-array element addresses with void-pointer
+globals and native writes. It checks the same output at both optimization levels
+and verifies that a final one-past pointer is valid for a zero-length write.
+
 ## Scope and validation
 
 This is a native host-target driver. Cross-target selection, sysroot and SDK

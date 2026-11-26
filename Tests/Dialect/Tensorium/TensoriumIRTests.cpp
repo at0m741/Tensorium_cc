@@ -125,7 +125,8 @@ void checksGlobalAddressSymbols(mlir::MLIRContext &context) {
   builder.setInsertionPointToEnd(module->getBody());
   auto external = tensorium::createOp<tensorium::GlobalOp>(
       builder, loc, builder.getStringAttr("external_object"),
-      mlir::TypeAttr::get(builder.getI32Type()),
+      mlir::TypeAttr::get(
+          tensorium::ArrayType::get(&context, 4, builder.getI32Type())),
       tensorium::GlobalLinkageAttr::get(&context,
                                         tensorium::GlobalLinkage::external),
       mlir::Attribute{}, mlir::UnitAttr{});
@@ -137,7 +138,8 @@ void checksGlobalAddressSymbols(mlir::MLIRContext &context) {
       tensorium::GlobalLinkageAttr::get(&context,
                                         tensorium::GlobalLinkage::external),
       tensorium::GlobalAddressAttr::get(
-          &context, mlir::FlatSymbolRefAttr::get(&context, "external_object")),
+          &context, mlir::FlatSymbolRefAttr::get(&context, "external_object"),
+          llvm::ArrayRef<int64_t>{0, 2}),
       mlir::UnitAttr{});
   EXPECT(mlir::succeeded(mlir::verify(module.get())));
   // Symbol rewrites must see references nested inside the custom attribute.
@@ -147,6 +149,7 @@ void checksGlobalAddressSymbols(mlir::MLIRContext &context) {
   auto initial =
       mlir::cast<tensorium::GlobalAddressAttr>(*pointer.getInitialValue());
   EXPECT(initial.getGlobal().getValue() == "renamed");
+  EXPECT(initial.getIndices() == (llvm::ArrayRef<int64_t>{0, 2}));
   EXPECT(mlir::succeeded(mlir::verify(module.get())));
   std::string text;
   llvm::raw_string_ostream stream(text);

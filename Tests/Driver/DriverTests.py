@@ -213,6 +213,13 @@ class Tests:
             assert result.stdout == "Hi\n", result.stdout
             assert result.stderr == "", result.stderr
 
+    def write_array(self):
+        for optimization in ("-O0", "-O2"):
+            self.driver(optimization, self.source("write_global_array.c"), "-o", "write-array")
+            result = self.run([self.directory / "write-array"])
+            assert result.stdout == "Hi\n", result.stdout
+            assert result.stderr == "", result.stderr
+
     def sibling_tools(self):
         # No tool overrides: exercise sibling cc1/optimizer and configured tools.
         result = self.driver("-v", self.source("standalone.c"), "-o", "sibling", configured=False)

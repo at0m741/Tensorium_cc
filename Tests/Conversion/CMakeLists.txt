@@ -53,3 +53,18 @@ tensorium_add_llvm_fixture(void_offset 1 "cannot offset a void pointer")
 tensorium_add_llvm_fixture(void_difference 1 "cannot subtract void pointers")
 tensorium_add_llvm_fixture(invalid_pointer_cast 1 "identical pointees or a void pointer endpoint")
 tensorium_add_llvm_fixture(void_array 1 "expected a supported array element type")
+
+foreach(LAYOUT IN ITEMS 32 64 mixed)
+  tensorium_add_llvm_fixture(global_array_address${LAYOUT} 0)
+endforeach()
+foreach(FIXTURE IN ITEMS root_negative root_overflow root_one_past negative overflow
+                         too_deep parent_one_past)
+  tensorium_add_llvm_fixture(global_array_${FIXTURE} 1 "invalid or out-of-bounds array path")
+endforeach()
+tensorium_add_llvm_fixture(global_array_pointer_type 1 "address initializer pointee type does not match")
+tensorium_add_llvm_fixture(global_array_index_width 1 "target GEP index width")
+
+tensorium_add_llvm_fixture(global_array_void_pointer32 0)
+tensorium_add_llvm_fixture(global_array_void_pointer64 0)
+tensorium_add_llvm_fixture(global_array_void_bounds 1 "invalid or out-of-bounds array path")
+tensorium_add_llvm_fixture(global_array_void_parent_one_past 1 "invalid or out-of-bounds array path")

@@ -109,6 +109,13 @@ control-flow position. This prevents repeated stack allocation in loops while
 preserving repeated initialization and its side effects. Explicit lexical
 lifetime operations and variable-length stack allocation remain future work.
 
+The AST module also owns `ConstantExpr` and `AddressConstant` evaluators. The
+address evaluator resolves typed object-address expressions into a declaration
+and an array index path, checks intermediate/final bounds and rejects object
+reads. CodeGen turns that result into a TableGen-defined `GlobalAddressAttr`.
+The dialect verifies symbol resolution and typed paths; LLVM lowering chooses
+GEP index widths and object strides from the configured target layout.
+
 Tests live under `Tests/Basic`, `Tests/AST`, `Tests/Lex`, `Tests/Parse`,
 `Tests/Sema`, `Tests/CodeGen` and `Tests/Frontend`. CLI fixtures and expected dumps
 retain their existing paths. AST tests cover destruction and conversions that

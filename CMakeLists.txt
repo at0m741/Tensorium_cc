@@ -45,6 +45,7 @@ cc1_add_module(cc1_ast
   lib/AST/Type.cpp
   lib/AST/ASTDump.cpp
   lib/AST/ConstantExpr.cpp
+  lib/AST/AddressConstant.cpp
 )
 target_link_libraries(cc1_ast PUBLIC cc1_basic)
 

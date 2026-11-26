@@ -73,6 +73,25 @@ template <typename Op> struct MemoryLowering : OpConversionPattern<Op> {
         if (!zero && !address)
           value = *initial;
       }
+      Type rootType;
+      if (address && !address.getIndices().empty()) {
+        auto *symbol =
+            SymbolTable::lookupNearestSymbolFrom(op, address.getGlobal());
+        if (auto object = dyn_cast_or_null<tensorium::GlobalOp>(symbol))
+          rootType = converter->convertType(object.getObjectType());
+        else if (auto object = dyn_cast_or_null<LLVM::GlobalOp>(symbol))
+          rootType = object.getGlobalType();
+        if (!rootType)
+          return rewriter.notifyMatchFailure(
+              op, "cannot resolve global address root type");
+        auto indexType =
+            static_cast<const LLVMTypeConverter *>(converter)->getIndexType();
+        for (int64_t index : address.getIndices())
+          if (!llvm::APInt(64, static_cast<uint64_t>(index), true)
+                   .isSignedIntN(cast<IntegerType>(indexType).getWidth()))
+            return op.emitOpError("global address index is not representable "
+                                  "in the target GEP index width");
+      }
       auto global = createOp<LLVM::GlobalOp>(
           rewriter, loc, type, op.getConstant(),
           op.getLinkage() == tensorium::GlobalLinkage::internal
@@ -89,6 +108,20 @@ template <typename Op> struct MemoryLowering : OpConversionPattern<Op> {
                                                   address.getGlobal())
                           .getResult()
                     : createOp<LLVM::ZeroOp>(rewriter, loc, type).getResult();
+        if (rootType) {
+          auto indexType =
+              static_cast<const LLVMTypeConverter *>(converter)->getIndexType();
+          SmallVector<LLVM::GEPArg> indices;
+          for (int64_t index : address.getIndices()) {
+            auto constant = createOp<LLVM::ConstantOp>(
+                rewriter, loc, indexType,
+                rewriter.getIntegerAttr(indexType, index));
+            indices.push_back(constant.getResult());
+          }
+          initial = createOp<LLVM::GEPOp>(rewriter, loc, type, rootType,
+                                          initial, indices)
+                        .getResult();
+        }
         createOp<LLVM::ReturnOp>(rewriter, loc, initial);
       }
       rewriter.eraseOp(op);

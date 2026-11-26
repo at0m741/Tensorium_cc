@@ -87,7 +87,7 @@ Primary sources:
 | `inline` and old-style definitions | Missing complete support | C99 inline/linkage rules and old-style function definitions need implementation. |
 | `return`, `if`/`else`, `while`, `for`, `break`, `continue` | Supported subset | Integer and supported pointer conditions are emitted as CFG control flow. Floating conditions are not generated. |
 | `do`/`while`, `switch`/`case`, labels and `goto` | Missing syntax | AST node placeholders do not provide a parser, Sema or CodeGen implementation. |
-| File-scope declarations and initializers | Supported subset | Compatible declarations merge into one symbol; integer constants, null pointers, direct global object addresses and zero-initialized objects lower to LLVM. Address offsets and aggregate initializers remain missing. |
+| File-scope declarations and initializers | Supported subset | Compatible declarations merge into one symbol; integer constants, null pointers, scalar/array addresses, constant pointer offsets and zero-initialized objects lower to LLVM. Aggregate initializers remain missing. |
 | Static local objects | Partial frontend | Persistent storage, initialization and CodeGen remain missing. |
 | Struct/union/enum definitions | Missing syntax | Forward tags exist, but definitions, enumerators and useful member access are unavailable. |
 | Record layout and aggregate ABI | Missing | Field offsets, bit-fields, flexible array members, aggregate copies and native argument/result classification need implementation. |
@@ -150,12 +150,14 @@ File-scope objects now use TableGen-defined global/address operations and typed
 linkage attributes. CodeGen merges canonical declarations, emits integer or zero
 initializers, and resolves accesses from functions. The shared AST evaluator
 checks target-width integer arithmetic and rejects signed overflow in its
-supported subset. Direct addresses such as `int *p = &g` use a generated
-symbolic attribute, with symbol/type verification and LLVM address initializers. The function-prototype symbol-binding issue has been fixed.
+supported subset. The AST address evaluator supports direct object addresses,
+array decay, constant pointer offsets and nested indexing, with bounds checks.
+A generated symbolic attribute carries the typed path into LLVM initializer
+regions. The function-prototype symbol-binding issue has been fixed.
 
 Remaining work includes complete C99 constant-expression legality in Sema,
-`sizeof` and other constant operators, array address decay and element offsets,
-aggregate/string initializers, static locals and broader tentative-definition/ABI
+`sizeof` and other constant operators, aggregate/string initializers, static
+locals and broader tentative-definition/ABI
 coverage. [Global fixtures](../Tests/CodeGen/Globals/) now register emission,
 structure, rejection and native execution tests; their latest execution status
 must be checked separately. See [global object support](globals.md).
@@ -192,7 +194,7 @@ must be recorded separately from this source-based inventory.
 
 For the first practical multi-file C project:
 
-1. Extend global-object constant checking, address and aggregate initializers,
+1. Extend global-object constant checking and aggregate initializers,
    including canonical symbols, initialization, reads/writes and linkage cases.
 2. Implement missing integer operators and lazy logical/conditional evaluation.
 3. Generate character/string literals and common array initialization forms.
