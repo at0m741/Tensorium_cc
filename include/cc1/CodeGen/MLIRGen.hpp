@@ -39,7 +39,10 @@ private:
   llvm::DenseMap<const Decl *, mlir::Value> values;
   llvm::DenseMap<const Decl *, Address> storage;
   llvm::DenseMap<const Decl *, mlir::func::FuncOp> functions;
+  llvm::DenseMap<const Decl *, const VarDecl *> globals;
   LocalStorageAnalysis storageAnalysis;
+
+  mlir::LogicalResult emitGlobals(const TranslationUnit &unit);
 
   Address createObjectStorage(mlir::func::FuncOp function, mlir::Type type,
                               const Type &objectType);

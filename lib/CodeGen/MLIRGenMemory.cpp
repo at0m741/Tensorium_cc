@@ -73,6 +73,19 @@ Address MLIRGen::emitLValue(const Expr &expr) {
     return {};
   }
 
+  const Decl *key = reference->decl->canonicalDecl
+                        ? reference->decl->canonicalDecl : reference->decl;
+  auto global = globals.find(key);
+  if (global != globals.end()) {
+    auto type = lowerType(*global->second->type, expr.loc);
+    if (!type)
+      return {};
+    auto pointer = createOp<tensorium::GetGlobalOp>(builder,
+        builder.getUnknownLoc(), tensorium::PtrType::get(builder.getContext(), type),
+        mlir::FlatSymbolRefAttr::get(builder.getContext(), global->second->name));
+    return {pointer.getResult(), type, expr.type};
+  }
+
   auto slot = storage.find(reference->decl);
   if (slot != storage.end())
     return slot->second;

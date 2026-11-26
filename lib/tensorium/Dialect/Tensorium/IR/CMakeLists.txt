@@ -7,6 +7,7 @@ add_mlir_dialect_library(tensorium_ir
     TensoriumDialectIncGen
     TensoriumTypesIncGen
     TensoriumOpsIncGen
+    TensoriumEnumsIncGen
 
   LINK_LIBS PUBLIC
     MLIRIR

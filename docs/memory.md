@@ -35,6 +35,56 @@ their `void *` types. Typed external allocation/release wrappers can already be
 compiled and used; the compiler does not need its own allocator for that path.
 Heap allocation tracking and protection metadata are not implemented.
 
+## SSA bindings and automatic storage
+
+`LocalStorageAnalysis` runs on the typed AST before a function is emitted. A
+scalar parameter can stay in SSA when it is neither modified nor addressed. An
+automatic scalar local can stay in SSA when it has an initializer, is neither
+modified nor addressed, is non-volatile and does not refer to itself while its
+initializer is evaluated. Unsupported AST nodes conservatively require storage.
+The backend's existing type and volatile-access restrictions still apply.
+
+For example, the generator binds `y` directly to its initializer result:
+
+```c
+int f(int x) {
+  int y = x + 1;
+  return y * 2;
+}
+```
+
+This function needs no Tensorium allocation, load or store. The choice is made
+during generation, without relying on a later promotion or cleanup pass.
+Read-only bindings remain SSA values in `if`, `while` and `for` bodies.
+
+A pointer variable can also be an SSA value while the pointed-to object remains
+mutable. Writing through `*p` or `p[i]` does not itself modify `p`; rebinding or
+incrementing `p` does. Pointee loads and stores remain real memory accesses, and
+copying a loaded value into a local preserves the value read at initialization.
+For the current fixed-size type subset, `sizeof` does not evaluate its operand,
+so `sizeof(x++)` and `sizeof(&x)` do not require storage for an otherwise
+unmodified, non-addressed `x`.
+
+Modified or address-taken parameters are allocated and initialized in the
+function entry block. Other automatic objects that require storage, including
+fixed-size arrays and mutable loop locals, also receive entry-block allocations.
+Their initializers remain at the source declaration: they run on each relevant
+iteration, after any preceding conditions, and are skipped when control flow
+does not reach the declaration. Uninitialized locals receive no implicit store.
+Different declarations keep distinct allocations, including shadowed objects
+whose lifetimes overlap.
+
+This placement reserves storage once per function invocation. It does not add
+lexical lifetime markers, protected allocation identities or dynamic stack
+save/restore. VLAs remain unsupported. Hand-written Tensorium IR may still put
+an `alloca` inside a loop; the operation retains its per-execution semantics and
+the LLVM conversion does not perform this frontend placement policy.
+
+Global initializer expressions can now be parsed and type-checked, but global
+constant-expression checks and object generation are still in progress. This
+does not enable global storage in `--emit-mlir`. See
+[the frontend status](sema.md#file-scope-objects-in-progress).
+
 ## IR and representation
 
 `!tensorium.array<N, T>` describes a contiguous memory object, not an SSA tensor.
@@ -71,6 +121,22 @@ target from the machine running the compiler. `sizeof` uses the frontend's
 matching target sizes for the supported object types and does not evaluate its
 operand. Tests cover 32-bit and 64-bit LLVM layouts independently of the host.
 
+The layout requirement also applies to hand-written or previously saved modules
+that contain only standard operations. For example, the current AArch64/macOS
+preset uses:
+
+```mlir
+module attributes {
+  llvm.data_layout = "e-m:o-i64:64-i128:128-n32:64-S128",
+  llvm.target_triple = "aarch64-apple-macosx13.0.0"
+} {
+}
+```
+
+Use the layout of the intended target rather than copying this preset for a
+different platform. Fresh output from `cc1 --emit-mlir` includes the target
+attributes automatically; standard canonicalization preserves them.
+
 This is an unprotected lowering. It adds no bounds, lifetime or null checks.
 The usual C rules for valid accesses, one-past pointers, pointer differences and
 object lifetime apply. Future MemProtect passes must run before pointer types
@@ -87,9 +153,10 @@ continue to exercise that path independently of the direct LLVM path.
 ## Build and execute
 
 ```sh
-cmake --build "$HOME/Developer/build/tensorium-llvm24" -j 2
+cmake --build "$HOME/Developer/build/tensorium-llvm24" -j 2 &&
 ctest --test-dir "$HOME/Developer/build/tensorium-llvm24" \
-  -R 'mlir_memory_|tensorium_to_llvm_' --output-on-failure
+  -R 'mlir_memory_|tensorium_to_llvm_|mlir_codegen|local_storage_analysis|mlir_local_ssa|mlir_parameter_ssa_runtime|mlir_ssa_' \
+  --output-on-failure
 ```
 
 The C fixtures under `Tests/CodeGen/Memory/valid` are compiled and run at `-O0`
@@ -98,9 +165,18 @@ unit, exercising both directions of the pointer ABI. Conversion fixtures cover
 layouts, parse/print round-trips, idempotence, verifier failures, invalid target
 layouts and rejection of residual Tensorium types hidden in metadata.
 
+`Tests/CodeGen/SSA` adds raw-IR checks and native fixtures for read-only bindings,
+mutable fallbacks, entry-block allocations and loop initializer evaluation.
+Its analysis-only fixture is never generated or executed. See
+[the SSA test guide](../Tests/CodeGen/SSA/README.md) for individual test names and
+commands. A registered test describes coverage; consult the current CTest run
+for its validation result.
+
 ## Generation audit
 
 The [memory and CodeGen audit](audits/memory_codegen_audit.md) records actual
-generated IR, remaining frontend/ABI gaps, redundant memory traffic, and a
-proposed SSA/storage split. It also documents loop-local stack allocation and
-lexical lifetime work that remains necessary before a protected pipeline.
+generated IR, remaining frontend/ABI gaps, redundant memory traffic, and
+the original SSA/storage proposal. Its measurements describe the older compiler
+baseline, before SSA binding selection and entry-block allocation placement.
+They have not been remeasured for the current generator. Lexical lifetime,
+general mutable-variable SSA construction and protected-memory work remain open.

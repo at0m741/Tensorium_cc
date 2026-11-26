@@ -104,6 +104,12 @@ mlir::Value MLIRGen::emitExpr(const Expr &expr) {
   }
 
   if (auto *ref = dynamic_cast<const IdentExpr *>(&expr)) {
+    const Decl *key = ref->decl && ref->decl->canonicalDecl
+                          ? ref->decl->canonicalDecl : ref->decl;
+    if (globals.count(key)) {
+      auto address = emitLValue(expr);
+      return address ? emitLoad(address) : mlir::Value{};
+    }
     auto slot = storage.find(ref->decl);
     if (slot != storage.end())
       return emitLoad(slot->second);

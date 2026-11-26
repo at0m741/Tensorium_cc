@@ -13,6 +13,32 @@ described below remain planned components.
 available for its scalar subset. Native tests exercise both paths and execute
 generated programs at `-O0` and `-O2`. See [C memory support](memory.md).
 
+## Current frontend generation policy
+
+The frontend performs a declaration-use analysis before emitting each function.
+Read-only, non-addressed scalar parameters and eligible initialized automatic
+locals are bound directly to SSA values. Writing through a pointer remains a
+memory access but does not require storage for an unchanged pointer variable.
+Modified or address-observable objects and fixed-size arrays retain Tensorium
+memory operations.
+
+All fixed-size allocations created by CC1 are inserted in the function entry
+block. Local initializers and their stores remain at the declaration's CFG
+position, including in nested loops and after `continue`/`break` conditions.
+The conversion itself preserves the placement of allocations in its input;
+hoisting is a frontend generation policy, not a Tensorium-to-LLVM optimization.
+Explicit lexical lifetime operations and VLA stack management remain planned.
+
+The existing raw-IR and native regression cases are documented in
+[the SSA test guide](../Tests/CodeGen/SSA/README.md). General SSA joins for mutable
+variables, direct `i1` condition generation and Tensorium promotion interfaces
+remain future work.
+
+File-scope objects use `tensorium.global` and `tensorium.get_global`, declared
+in `TensoriumGlobalOps.td`. `TensoriumEnums.td` generates typed pointer predicates
+and global linkage attributes. Integer and zero initializers lower to LLVM
+globals; symbol references lower to LLVM addresses. See [global object support](globals.md).
+
 ## Module boundaries
 
 The C frontend stays under `include/cc1` and its existing `lib` directories.
@@ -102,6 +128,11 @@ access width before defining operations. Record the target layout in the module;
 conversion passes must not infer it from the compiler host. Static source type
 and runtime allocation type are separate concepts.
 
+`--convert-tensorium-to-llvm` requires an explicit valid `llvm.data_layout`, even
+for an input containing only standard operations. CC1 emits this attribute and
+`llvm.target_triple`; hand-written or older saved modules must provide their
+intended target layout. Canonicalization does not supply a missing target.
+
 The MemProtect dialect uses the `memprotect` namespace and an abstract protected
 pointer type. Define bounds propagation, access checks, lifetime validation and
 failure behavior before selecting its concrete LLVM representation. Bounds alone
@@ -184,3 +215,9 @@ contract, tests and the remaining structured-loop and memory integration work.
 Fixed-size arrays and pointer arithmetic are implemented by the subsequent C
 memory milestone described in [memory.md](memory.md). Define and implement
 MemProtect incrementally once the required base memory semantics are tested.
+
+Subsequent frontend changes add read-only parameter/local SSA bindings and
+entry-block storage for fixed-size automatic objects, with initialization left
+at the source declaration. The earlier [generation audit](audits/memory_codegen_audit.md)
+is retained as a historical baseline; its measured operation counts predate
+these changes.

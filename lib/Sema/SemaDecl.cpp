@@ -179,7 +179,7 @@ bool Sema::declare(Decl *d, bool global) {
         dynamic_cast<TypedefDecl *>(d) && dynamic_cast<TypedefDecl *>(previous);
     bool linkageConflict = false;
     if (bothVars) {
-      auto oldSC = static_cast<VarDecl *>(previous)->sc;
+      auto oldSC = static_cast<VarDecl *>(previous->canonicalDecl)->sc;
       auto newSC = static_cast<VarDecl *>(d)->sc;
       linkageConflict =
           (newSC == StorageClass::STATIC && oldSC != StorageClass::STATIC) ||
@@ -218,24 +218,22 @@ bool Sema::declare(Decl *d, bool global) {
       return false;
     }
   }
-  if (!(previous && d->type->isFunction() && !d->type->hasPrototype &&
-        previous->type->hasPrototype))
-
-    if (global) {
-      if (auto *var = dynamic_cast<VarDecl *>(d)) {
-        if (var->init) {
-          auto [previousDefinition, inserted] =
-              globalObjectDefinitions.emplace(var->canonicalDecl, var);
-
-          if (!inserted) {
-            fail(var->loc, "redefinition of global object '" + var->name + "'");
-            diag.note(previousDefinition->second->loc,
-                      "previous definition is here");
-            return false;
-          }
+  if (global) {
+    if (auto *var = dynamic_cast<VarDecl *>(d)) {
+      if (var->init) {
+        auto [previousDefinition, inserted] =
+            globalObjectDefinitions.emplace(var->canonicalDecl, var);
+        if (!inserted) {
+          fail(var->loc, "redefinition of global object '" + var->name + "'");
+          diag.note(previousDefinition->second->loc,
+                    "previous definition is here");
+          return false;
         }
       }
     }
-  symbols.bind(d);
+  }
+  if (!(previous && d->type->isFunction() && !d->type->hasPrototype &&
+        previous->type->hasPrototype))
+    symbols.bind(d);
   return true;
 }

@@ -8,6 +8,32 @@ This is an audit, not a compiler implementation change. The reproducible C
 inputs are in [memory_codegen_cases.c](memory_codegen_cases.c). Counts below
 are static operation counts, not execution counts or performance measurements.
 
+## Historical baseline and subsequent changes
+
+The measurements and implementation descriptions below refer to the compiler
+baseline dated above. They are retained as audit evidence, not as current
+operation counts. They have not been rerun for the current generator.
+
+Since that baseline, the implementation has added:
+
+- `LocalStorageAnalysis` and per-declaration SSA/storage selection for read-only
+  parameters and eligible initialized scalar locals.
+- SSA parameter bindings across CFG control flow, replacing the unconditional
+  `materializeParameters()` calls described below.
+- Entry-block placement for fixed-size automatic allocations, while initializer
+  expressions and stores remain at their source control-flow position.
+- Real C regression fixtures and raw-IR checks for these changes, including
+  nested loops, shadowing, aliasing and skipped/repeated initializer evaluation.
+- File-scope initializer parsing and initialized-definition tracking in Sema;
+  global constant evaluation and MLIR global generation are still unfinished.
+
+For current contracts, tests and remaining limitations, see
+[C memory support](../memory.md), [semantic analysis](../sema.md) and the
+[SSA test guide](../../Tests/CodeGen/SSA/README.md). The direct-condition,
+general SSA-join, explicit-lifetime and lowering improvements proposed below
+remain separate work. C11 features listed in the historical feature table are
+outside the current C99 language target.
+
 ## Remaining memory-related features
 
 The following legal C inputs were tested separately through parsing
@@ -238,7 +264,10 @@ promotion before lowering away its pointer/object semantics.
 
 ## Reproduce the IR comparison
 
-From the repository root, with a configured MLIR build:
+To reproduce the recorded counts, use a separate checkout of the baseline commit
+named above and configure an MLIR build there. Run the commands below from that
+checkout's root. The same commands can inspect the current generator, but their
+new output is not a revalidation of the historical table.
 
 ```sh
 build-mlir/cc1 --emit-mlir docs/audits/memory_codegen_cases.c > /tmp/memory.raw.mlir

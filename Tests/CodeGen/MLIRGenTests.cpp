@@ -687,7 +687,6 @@ void rejects_unsupported_constructs() {
        "does not support this binary operator"},
       {"int f(int n) { for (; n; n /= 2) {} return n; }",
        "does not support this binary operator"},
-      {"int global;", "not implemented for this declaration"},
       {"int f(void) { static int x; return x; }",
        "automatic scalar local storage"},
       {"int f(void) { int x = 1; }",

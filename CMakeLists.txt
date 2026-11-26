@@ -44,6 +44,7 @@ cc1_add_module(cc1_basic
 cc1_add_module(cc1_ast
   lib/AST/Type.cpp
   lib/AST/ASTDump.cpp
+  lib/AST/ConstantExpr.cpp
 )
 target_link_libraries(cc1_ast PUBLIC cc1_basic)
 
@@ -126,6 +127,7 @@ if(CC1_ENABLE_MLIR)
     lib/CodeGen/MLIRGenFunction.cpp
     lib/CodeGen/MLIRGenStmt.cpp
     lib/CodeGen/MLIRGenMemory.cpp
+    lib/CodeGen/MLIRGenGlobals.cpp
   )
 
   target_include_directories(cc1_codegen SYSTEM PUBLIC

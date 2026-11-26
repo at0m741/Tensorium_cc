@@ -12,7 +12,6 @@
 #include "tensorium/Dialect/Tensorium/IR/TensoriumDialect.h"
 #include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
 #include "tensorium/Support/Builders.h"
-#include "llvm/ADT/StringSwitch.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Support/Error.h"
 #include <type_traits>
@@ -60,6 +59,38 @@ template <typename Op> struct MemoryLowering : OpConversionPattern<Op> {
           rewriter, loc, converter->convertType(op.getResult().getType()),
           element, one.getResult());
       rewriter.replaceOp(op, allocation.getResult());
+    } else if constexpr (std::is_same_v<Op, tensorium::GlobalOp>) {
+      Type type = converter->convertType(op.getObjectType());
+      if (!type)
+        return rewriter.notifyMatchFailure(op,
+                                           "unsupported global object type");
+      Attribute value;
+      bool zero = false;
+      if (auto initial = op.getInitialValue()) {
+        zero = isa<UnitAttr>(*initial);
+        if (!zero)
+          value = *initial;
+      }
+      auto global = createOp<LLVM::GlobalOp>(
+          rewriter, loc, type, op.getConstant(),
+          op.getLinkage() == tensorium::GlobalLinkage::internal
+              ? LLVM::Linkage::Internal
+              : LLVM::Linkage::External,
+          op.getSymName(), value);
+      if (zero) {
+        OpBuilder::InsertionGuard guard(rewriter);
+        auto *block = new Block();
+        global.getInitializerRegion().push_back(block);
+        rewriter.setInsertionPointToStart(block);
+        auto initial = createOp<LLVM::ZeroOp>(rewriter, loc, type);
+        createOp<LLVM::ReturnOp>(rewriter, loc, initial.getResult());
+      }
+      rewriter.eraseOp(op);
+    } else if constexpr (std::is_same_v<Op, tensorium::GetGlobalOp>) {
+      auto address = createOp<LLVM::AddressOfOp>(
+          rewriter, loc, converter->convertType(op.getResult().getType()),
+          op.getNameAttr());
+      rewriter.replaceOp(op, address.getResult());
     } else if constexpr (std::is_same_v<Op, tensorium::LoadOp>) {
       auto load = createOp<LLVM::LoadOp>(
           rewriter, loc, converter->convertType(op.getResult().getType()),
@@ -90,15 +121,27 @@ template <typename Op> struct MemoryLowering : OpConversionPattern<Op> {
                                 array, adaptor.getBase(), indices);
       rewriter.replaceOp(op, decay.getResult());
     } else if constexpr (std::is_same_v<Op, tensorium::PtrCmpOp>) {
-      auto predicate =
-          llvm::StringSwitch<LLVM::ICmpPredicate>(op.getPredicate())
-              .Case("eq", LLVM::ICmpPredicate::eq)
-              .Case("ne", LLVM::ICmpPredicate::ne)
-              .Case("ult", LLVM::ICmpPredicate::ult)
-              .Case("ule", LLVM::ICmpPredicate::ule)
-              .Case("ugt", LLVM::ICmpPredicate::ugt)
-              .Case("uge", LLVM::ICmpPredicate::uge)
-              .Default(LLVM::ICmpPredicate::eq);
+      LLVM::ICmpPredicate predicate;
+      switch (op.getPredicate()) {
+      case tensorium::PtrPredicate::eq:
+        predicate = LLVM::ICmpPredicate::eq;
+        break;
+      case tensorium::PtrPredicate::ne:
+        predicate = LLVM::ICmpPredicate::ne;
+        break;
+      case tensorium::PtrPredicate::ult:
+        predicate = LLVM::ICmpPredicate::ult;
+        break;
+      case tensorium::PtrPredicate::ule:
+        predicate = LLVM::ICmpPredicate::ule;
+        break;
+      case tensorium::PtrPredicate::ugt:
+        predicate = LLVM::ICmpPredicate::ugt;
+        break;
+      case tensorium::PtrPredicate::uge:
+        predicate = LLVM::ICmpPredicate::uge;
+        break;
+      }
       auto comparison = createOp<LLVM::ICmpOp>(
           rewriter, loc, predicate, adaptor.getLhs(), adaptor.getRhs());
       rewriter.replaceOp(op, comparison.getResult());
@@ -172,6 +215,8 @@ struct TensoriumToLLVMPass
     ObjectTypeConverter converter(&getContext(), options);
     RewritePatternSet patterns(&getContext());
     patterns.add<
+        MemoryLowering<tensorium::GlobalOp>,
+        MemoryLowering<tensorium::GetGlobalOp>,
         MemoryLowering<tensorium::AllocaOp>, MemoryLowering<tensorium::LoadOp>,
         MemoryLowering<tensorium::StoreOp>, MemoryLowering<tensorium::NullOp>,
         MemoryLowering<tensorium::PtrOffsetOp>,

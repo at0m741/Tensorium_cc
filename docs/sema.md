@@ -43,6 +43,43 @@ load. Its result has the target's unsigned pointer-sized integer type;
 unevaluated. Incomplete tentative file-scope arrays become one-element arrays
 at the end of the translation unit unless a later declaration completes them.
 
+## File-scope objects (in progress)
+
+The parser now records file-scope initializer expressions in `VarDecl::init`.
+Sema analyzes those expressions and applies initializer conversions, just as it
+does for automatic locals. Compatible redeclarations share `canonicalDecl`.
+`globalObjectDefinitions` tracks declarations with initializers by that canonical
+identity and diagnoses a second initialized definition, with a note pointing to
+the first definition. The map is reset for each analyzed translation unit.
+
+For example, repeated compatible declarations and tentative definitions can
+surround a single initialized definition:
+
+```c
+int counter;
+extern int counter;
+int counter = 3;
+int counter;
+```
+
+Two declarations with initializers, such as `int counter = 3;` followed by
+`int counter = 4;`, are diagnosed as a redefinition of the global object.
+
+The function-prototype guard now surrounds symbol binding separately from the
+global-definition check. Object linkage checks consult the canonical declaration,
+including a `static` object redeclared through `extern`.
+
+Sema checks initializer types; CodeGen invokes the shared AST integer evaluator
+for the supported static initializer subset. A successful semantic-only check
+does not yet establish complete C99 static-initializer legality. Tensorium global
+operations and LLVM lowering are implemented for integer constant initializers,
+null pointer initializers and zero-initialized objects. General address constants,
+aggregate initializers and static locals remain unfinished.
+
+The [global fixtures](../Tests/CodeGen/Globals/) include successful CodeGen,
+structural checks, native execution cases and rejected initializers. See
+[global object support](globals.md) for the exact scope and test commands.
+
 ## Contract for MLIR generation
 
 After a successful analysis:
@@ -78,6 +115,11 @@ The AST and semantic analysis modules have no LLVM/MLIR dependency. The optional
 backend consumes checked function signatures, parameters, expressions, calls
 and returns. It emits Tensorium object storage for automatic locals, modified
 parameters, nested pointers and fixed-size arrays, including address-taking.
+Its AST-based `LocalStorageAnalysis` selects read-only SSA bindings before each
+function is emitted. Eligible initialized locals and read-only parameters avoid
+memory operations; other supported automatic objects use entry-block storage,
+with initialization at the appropriate source control-flow position. This is a
+CodeGen decision and does not add an LLVM/MLIR dependency to Sema.
 The direct LLVM conversion implements ordinary pointer ABIs; a separate MemRef
 compatibility conversion retains the original scalar subset. Global storage
 generation remains unsupported. See [C memory support](memory.md).
@@ -86,10 +128,12 @@ generation remains unsupported. See [C memory support](memory.md).
 
 Automatic local declarations and scalar initializers are parsed and checked,
 including declaration visibility, nested scopes, typedef shadowing and initializer
-conversions. Global initializers, multiple declarators, explicit cast syntax,
-additional control-flow syntax (`do`, `switch`, `goto`), record/enum
-definitions and full constant-expression evaluation
-remain unsupported by the parser. Sema rejects unsupported statements rather
+conversions. File-scope initializer expressions are parsed and type-checked as
+described above; their constant-expression rules remain in progress. Multiple
+declarators, explicit cast syntax, additional control-flow syntax (`do`, `switch`,
+`goto`) and record/enum definitions remain unsupported by the parser. Full
+constant-expression checking and evaluation remain future semantic work.
+Sema rejects unsupported statements rather
 than silently sending them to a backend. Member access is diagnosed on incomplete
 records; useful member access awaits record definitions and layout support.
 

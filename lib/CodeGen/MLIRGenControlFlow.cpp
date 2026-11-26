@@ -15,7 +15,7 @@ mlir::Value MLIRGen::emitCondition(const Expr &expr) {
     auto zero =
         tensorium::createOp<tensorium::NullOp>(builder, loc, value.getType());
     return tensorium::createOp<tensorium::PtrCmpOp>(
-               builder, loc, builder.getI1Type(), builder.getStringAttr("ne"),
+               builder, loc, builder.getI1Type(), tensorium::PtrPredicate::ne,
                value, zero.getResult())
         .getResult();
   }

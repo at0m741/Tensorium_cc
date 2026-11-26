@@ -22,13 +22,18 @@ MLIRGen::generate(const TranslationUnit &unit) {
   module->getOperation()->setAttr("llvm.target_triple",
                                   builder.getStringAttr(target.triple));
 
+  globals.clear();
+  builder.setInsertionPointToEnd(module->getBody());
+  if (mlir::failed(emitGlobals(unit)))
+    return {};
   functions.clear();
   values.clear();
   storage.clear();
   llvm::DenseMap<const Decl *, const FuncDecl *> selected;
   llvm::SmallVector<const Decl *> order;
   for (const Decl *decl : unit.decls) {
-    if (dynamic_cast<const TypedefDecl *>(decl))
+    if (dynamic_cast<const TypedefDecl *>(decl) ||
+        dynamic_cast<const VarDecl *>(decl))
       continue;
     auto *function = dynamic_cast<const FuncDecl *>(decl);
     if (!function) {

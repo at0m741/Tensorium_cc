@@ -6,6 +6,11 @@ target_link_libraries(cc1_ast_tests
 )
 add_test(NAME ast_context COMMAND cc1_ast_tests)
 
+add_executable(cc1_constant_expr_tests AST/ConstantExprTests.cpp)
+target_link_libraries(cc1_constant_expr_tests PRIVATE
+  cc1_ast cc1_project_options cc1_warnings)
+add_test(NAME ast_constant_expr COMMAND cc1_constant_expr_tests)
+
 add_executable(cc1_frontend_tests Frontend/FrontendTests.cpp)
 target_compile_definitions(cc1_frontend_tests
   PRIVATE CC1_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}/Tests"
@@ -236,4 +241,5 @@ if(CC1_ENABLE_MLIR)
 
   add_subdirectory(CodeGen/Memory)
   add_subdirectory(CodeGen/SSA)
+  add_subdirectory(CodeGen/Globals)
 endif()

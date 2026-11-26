@@ -1,0 +1,1 @@
+volatile int object;

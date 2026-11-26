@@ -1,6 +1,6 @@
 # C memory tests
 
-CTest registers 18 C programs with `main` from `valid/`. They cover loads and stores,
+CTest registers C programs with `main` from `valid/`. They cover loads and stores,
 aliasing, local and nested pointers, reassignment in branches and loops,
 arrays, arrays of pointers, multidimensional arrays, signed offsets,
 element-based differences, increments, null pointers and unevaluated `sizeof`
@@ -25,6 +25,12 @@ cc1 -> Tensorium -> LLVM dialect -> LLVM IR -> Clang -> execution
 Each program executes at `-O0` and `-O2`. A nonzero exit code identifies the
 failed check. Intermediate files remain under `Tests/CodeGen/Memory/*-runtime/`
 in the build directory.
+
+The separate [SSA and loop storage suite](../SSA/README.md) checks read-only
+bindings, fixed-size entry-block allocations and initializer placement. These
+checks inspect raw generated IR before any cleanup pass and include native
+programs with nested loops, arrays, aliasing, `continue`/`break` and zero-trip
+initializer cases.
 
 The scalar tests in `Tests/Conversion/scalar_memory.mlir` continue to exercise
 the Tensorium -> MemRef -> LLVM compatibility path. The new conversion is also

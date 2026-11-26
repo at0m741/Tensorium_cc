@@ -75,14 +75,39 @@ Parse is split into parser mechanics, declarations, expressions and statements.
 Sema is split into declarations, expressions, statements and conversions.
 CodeGen is split into module declarations, types, functions, expressions,
 statements and storage. Scalar storage allocation, address lookup, loads and
-stores share helpers in `MLIRGenMemory.cpp`; integer parameters stay in SSA form
-until mutation or control flow requires storage.
+stores share helpers in `MLIRGenMemory.cpp`. `LocalStorageAnalysis` inspects the
+checked AST before each function is emitted and records writes, address-taking
+and self-references in initializers. This analysis belongs to CodeGen and has no
+LLVM/MLIR dependency of its own; it does not retain or invoke Sema.
+
+`MLIRGen` keeps the per-function analysis and two declaration-keyed maps:
+
+- `values` holds SSA bindings for eligible scalar parameters and initialized
+  automatic locals.
+- `storage` holds `Address` bindings for modified or address-observable objects,
+  uninitialized locals and fixed-size arrays.
+
+Declaration identity distinguishes shadowed variables. Read-only SSA bindings
+remain valid across CFG branches and loops; encountering control flow no longer
+spills all parameters. Mutable objects continue to use memory rather than
+requiring general SSA joins at this stage.
+
+`createObjectStorage(FuncOp, Type, const Type&)` inserts fixed-size allocations
+at the start of the function entry block and restores the caller's insertion
+point with `OpBuilder::InsertionGuard`. Parameter stores execute at function
+entry. Local initializer expressions and stores execute at the declaration's
+control-flow position. This prevents repeated stack allocation in loops while
+preserving repeated initialization and its side effects. Explicit lexical
+lifetime operations and variable-length stack allocation remain future work.
 
 Tests live under `Tests/Basic`, `Tests/AST`, `Tests/Lex`, `Tests/Parse`,
 `Tests/Sema`, `Tests/CodeGen` and `Tests/Frontend`. CLI fixtures and expected dumps
 retain their existing paths. AST tests cover destruction and conversions that
 outlive Parser/Sema; frontend tests cover retained ASTs and stream output;
-CodeGen tests cover parameter storage across nested control flow.
+CodeGen tests cover SSA bindings, parameter storage, declaration shadowing,
+entry-block allocations and initializer placement across nested control flow.
+The real C fixtures and raw-IR/native checks are described in
+[the SSA test guide](../Tests/CodeGen/SSA/README.md).
 
 The reusable MLIR backend has a separate `include/tensorium` and `lib/tensorium`
 boundary. CodeGen emits Tensorium pointers and memory operations; `tensorium-opt`

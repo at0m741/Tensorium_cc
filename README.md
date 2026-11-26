@@ -3,6 +3,10 @@
 A C frontend with an optional MLIR backend. The supported C subset is still
 growing.
 
+See [C99 coverage and remaining work](docs/coverage.md) for the current feature
+inventory, the distinction between frontend and CodeGen support, known issues
+and implementation priorities.
+
 ```sh
 cmake -S . -B build -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j 2
@@ -50,6 +54,25 @@ signatures, calls, returns and CFG block arguments. It rejects pointer-valued
 storage and external pointer ABIs; the direct LLVM conversion supports these
 with ordinary native pointers. See [C memory support](docs/memory.md) for the
 supported subset, semantics and execution tests.
+
+CodeGen now selects SSA values or memory storage per declaration before emitting
+a function. Read-only, non-addressed scalar parameters and eligible initialized
+locals stay in SSA across branches and loops. Objects that need storage use
+fixed-size allocations in the function entry block; local initializers still
+execute at the source declaration, including on each loop iteration. See the
+[SSA and loop storage tests](Tests/CodeGen/SSA/README.md).
+
+File-scope objects now use TableGen-defined `tensorium.global` and
+`tensorium.get_global` operations, with LLVM lowering for declarations,
+internal/external linkage, integer constant initializers and zero-initialized
+objects. Constant evaluation currently supports integer literals, arithmetic
+conversions and unary/binary `+`, `-`, `*`. See [global object support](docs/globals.md)
+for limitations and test commands.
+
+For hand-written MLIR, supply an explicit `llvm.data_layout` matching the target
+before running `--convert-tensorium-to-llvm`. CC1-generated modules already carry
+this attribute and `llvm.target_triple`. Use tools from the same configured build
+when multiple LLVM installations coexist.
 
 MLIR builds also enable the optional MOpt analysis libraries and tool, imported
 from MLIRArchOpt. They analyze structured `scf.for` loops and indexed `memref`

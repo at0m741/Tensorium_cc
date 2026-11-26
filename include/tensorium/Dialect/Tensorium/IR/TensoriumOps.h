@@ -4,6 +4,8 @@
 #include "tensorium/Dialect/Tensorium/IR/TensoriumTypes.h"
 
 #include "mlir/IR/OpDefinition.h"
+#include "mlir/IR/SymbolTable.h"
+#include "tensorium/Dialect/Tensorium/IR/TensoriumEnums.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #define GET_OP_CLASSES

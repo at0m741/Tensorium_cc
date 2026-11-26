@@ -3,6 +3,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "tensorium/Dialect/Tensorium/IR/TensoriumOps.h"
 #include "tensorium/Support/Builders.h"
+#include <optional>
 
 mlir::Value MLIRGen::emitBinary(const BinaryExpr &binary) {
   using tensorium::createOp;
@@ -75,32 +76,32 @@ mlir::Value MLIRGen::emitBinary(const BinaryExpr &binary) {
       return createOp<tensorium::PtrDiffOp>(
                  builder, loc, lowerType(*binary.type, binary.loc), lhs, rhs)
           .getResult();
-    const char *predicate = nullptr;
+    std::optional<tensorium::PtrPredicate> predicate;
     switch (binary.op) {
     case BinaryOp::EQ:
-      predicate = "eq";
+      predicate = tensorium::PtrPredicate::eq;
       break;
     case BinaryOp::NEQ:
-      predicate = "ne";
+      predicate = tensorium::PtrPredicate::ne;
       break;
     case BinaryOp::LT:
-      predicate = "ult";
+      predicate = tensorium::PtrPredicate::ult;
       break;
     case BinaryOp::LEQ:
-      predicate = "ule";
+      predicate = tensorium::PtrPredicate::ule;
       break;
     case BinaryOp::GT:
-      predicate = "ugt";
+      predicate = tensorium::PtrPredicate::ugt;
       break;
     case BinaryOp::GEQ:
-      predicate = "uge";
+      predicate = tensorium::PtrPredicate::uge;
       break;
     default:
       break;
     }
     if (predicate) {
       auto comparison = createOp<tensorium::PtrCmpOp>(
-          builder, loc, builder.getI1Type(), builder.getStringAttr(predicate),
+          builder, loc, builder.getI1Type(), *predicate,
           lhs, rhs);
       return createOp<mlir::arith::ExtUIOp>(builder, loc,
                                             lowerType(*binary.type, binary.loc),

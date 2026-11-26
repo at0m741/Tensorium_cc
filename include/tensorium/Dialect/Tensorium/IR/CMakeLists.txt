@@ -44,3 +44,10 @@ mlir_tablegen(TensoriumOps.cpp.inc
 
 add_public_tablegen_target(TensoriumOpsIncGen)
 
+
+set(LLVM_TARGET_DEFINITIONS TensoriumEnums.td)
+mlir_tablegen(TensoriumEnums.h.inc -gen-enum-decls
+  EXTRA_INCLUDES ${MLIR_INCLUDE_DIRS})
+mlir_tablegen(TensoriumEnums.cpp.inc -gen-enum-defs
+  EXTRA_INCLUDES ${MLIR_INCLUDE_DIRS})
+add_public_tablegen_target(TensoriumEnumsIncGen)
