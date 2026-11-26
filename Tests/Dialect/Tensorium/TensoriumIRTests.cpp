@@ -116,6 +116,42 @@ void checksGlobalSymbolVisibility(mlir::MLIRContext &context) {
   EXPECT(mlir::succeeded(mlir::verify(module.get())));
 }
 
+void checksGlobalAddressSymbols(mlir::MLIRContext &context) {
+  mlir::OpBuilder builder(&context);
+  auto loc = builder.getUnknownLoc();
+  mlir::OwningOpRef<mlir::ModuleOp> module(mlir::ModuleOp::create(loc));
+  builder.setInsertionPointToEnd(module->getBody());
+  auto external = tensorium::createOp<tensorium::GlobalOp>(
+      builder, loc, builder.getStringAttr("external_object"),
+      mlir::TypeAttr::get(builder.getI32Type()),
+      tensorium::GlobalLinkageAttr::get(&context,
+                                        tensorium::GlobalLinkage::external),
+      mlir::Attribute{}, mlir::UnitAttr{});
+  external.setVisibility(mlir::SymbolTable::Visibility::Private);
+  auto pointerType = tensorium::PtrType::get(&context, builder.getI32Type());
+  auto pointer = tensorium::createOp<tensorium::GlobalOp>(
+      builder, loc, builder.getStringAttr("pointer"),
+      mlir::TypeAttr::get(pointerType),
+      tensorium::GlobalLinkageAttr::get(&context,
+                                        tensorium::GlobalLinkage::external),
+      tensorium::GlobalAddressAttr::get(
+          &context, mlir::FlatSymbolRefAttr::get(&context, "external_object")),
+      mlir::UnitAttr{});
+  EXPECT(mlir::succeeded(mlir::verify(module.get())));
+  // Symbol rewrites must see references nested inside the custom attribute.
+  EXPECT(mlir::succeeded(mlir::SymbolTable::replaceAllSymbolUses(
+      external, builder.getStringAttr("renamed"), module.get())));
+  external.setSymName("renamed");
+  auto initial =
+      mlir::cast<tensorium::GlobalAddressAttr>(*pointer.getInitialValue());
+  EXPECT(initial.getGlobal().getValue() == "renamed");
+  EXPECT(mlir::succeeded(mlir::verify(module.get())));
+  std::string text;
+  llvm::raw_string_ostream stream(text);
+  module->print(stream);
+  EXPECT(mlir::parseSourceString<mlir::ModuleOp>(text, &context));
+}
+
 void rejectsInvalidMemoryIR(mlir::MLIRContext &context) {
   const char *cases[] = {
       "module { %p = tensorium.alloca : !tensorium.ptr<i32> }",
@@ -154,6 +190,7 @@ int main() {
     typesRoundTrip(context);
     checksMemoryEffects(context);
     checksGlobalSymbolVisibility(context);
+    checksGlobalAddressSymbols(context);
     rejectsInvalidMemoryIR(context);
     std::cout << "Tensorium IR tests passed\n";
   } catch (const std::exception &error) {

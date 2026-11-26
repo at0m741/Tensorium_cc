@@ -25,6 +25,14 @@ if(SOURCE MATCHES "layout(32|64)\\.mlir$")
     message(FATAL_ERROR "Incorrect target layout/array conversion:\n${OUTPUT}")
   endif()
 endif()
+if(SOURCE MATCHES "global_address(32|64)\\.mlir$")
+  if(NOT OUTPUT MATCHES "llvm.mlir.addressof @external" OR
+     NOT OUTPUT MATCHES "llvm.mlir.addressof @hidden" OR
+     NOT OUTPUT MATCHES "llvm.mlir.addressof @pointer" OR
+     OUTPUT MATCHES "llvm.store|llvm.ptrtoint")
+    message(FATAL_ERROR "Expected symbolic LLVM address initializers: ${OUTPUT}")
+  endif()
+endif()
 file(MAKE_DIRECTORY "${SCRATCH_DIR}")
 file(WRITE "${SCRATCH_DIR}/lowered.mlir" "${OUTPUT}")
 execute_process(

@@ -5,6 +5,7 @@
 
 void tensorium::TensoriumDialect::initialize() {
   registerTypes();
+  registerAttributes();
 
   addOperations<
 #define GET_OP_LIST

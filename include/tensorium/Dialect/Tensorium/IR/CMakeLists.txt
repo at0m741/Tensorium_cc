@@ -30,6 +30,13 @@ mlir_tablegen(TensoriumTypes.cpp.inc
 
 add_public_tablegen_target(TensoriumTypesIncGen)
 
+set(LLVM_TARGET_DEFINITIONS TensoriumAttrs.td)
+mlir_tablegen(TensoriumAttrs.h.inc -gen-attrdef-decls
+  -attrdefs-dialect=tensorium EXTRA_INCLUDES ${MLIR_INCLUDE_DIRS})
+mlir_tablegen(TensoriumAttrs.cpp.inc -gen-attrdef-defs
+  -attrdefs-dialect=tensorium EXTRA_INCLUDES ${MLIR_INCLUDE_DIRS})
+add_public_tablegen_target(TensoriumAttrsIncGen)
+
 set(LLVM_TARGET_DEFINITIONS TensoriumOps.td)
 
 mlir_tablegen(TensoriumOps.h.inc

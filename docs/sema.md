@@ -73,8 +73,9 @@ Sema checks initializer types; CodeGen invokes the shared AST integer evaluator
 for the supported static initializer subset. A successful semantic-only check
 does not yet establish complete C99 static-initializer legality. Tensorium global
 operations and LLVM lowering are implemented for integer constant initializers,
-null pointer initializers and zero-initialized objects. General address constants,
-aggregate initializers and static locals remain unfinished.
+null pointer initializers, direct global object addresses and zero-initialized
+objects. General address arithmetic, aggregate initializers and static locals
+remain unfinished.
 
 The [global fixtures](../Tests/CodeGen/Globals/) include successful CodeGen,
 structural checks, native execution cases and rejected initializers. See
@@ -121,8 +122,9 @@ memory operations; other supported automatic objects use entry-block storage,
 with initialization at the appropriate source control-flow position. This is a
 CodeGen decision and does not add an LLVM/MLIR dependency to Sema.
 The direct LLVM conversion implements ordinary pointer ABIs; a separate MemRef
-compatibility conversion retains the original scalar subset. Global storage
-generation remains unsupported. See [C memory support](memory.md).
+compatibility conversion retains the original scalar subset. File-scope storage
+and direct global-address initializers are described in [global object support](globals.md).
+See also [C memory support](memory.md).
 
 ## Boundaries of this first stage
 

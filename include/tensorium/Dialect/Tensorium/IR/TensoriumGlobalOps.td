@@ -1,12 +1,14 @@
 #ifndef TENSORIUM_GLOBAL_OPS_TD
 #define TENSORIUM_GLOBAL_OPS_TD
 
-def Tensorium_GlobalOp : Tensorium_Op<"global", [Symbol]> {
+def Tensorium_GlobalOp : Tensorium_Op<"global", [Symbol,
+    DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let summary = "Declare or define a global object";
   let description = [{
     An absent initial_value denotes a declaration. A unit initial_value denotes
     a zero-initialized definition. An integer attribute defines an integer
     object with that value. Internal linkage requires a definition.
+    A global_address attribute defines a pointer to the referenced global.
     Writing through a pointer to a constant definition is undefined.
     Linkage describes native linkage, independently of MLIR symbol visibility.
     Declarations require non-public MLIR symbol visibility, normally private,

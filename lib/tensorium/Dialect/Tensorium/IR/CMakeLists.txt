@@ -1,11 +1,13 @@
 add_mlir_dialect_library(tensorium_ir
   TensoriumDialect.cpp
   TensoriumTypes.cpp
+  TensoriumAttrs.cpp
   TensoriumOps.cpp
 
   DEPENDS
     TensoriumDialectIncGen
     TensoriumTypesIncGen
+    TensoriumAttrsIncGen
     TensoriumOpsIncGen
     TensoriumEnumsIncGen
 

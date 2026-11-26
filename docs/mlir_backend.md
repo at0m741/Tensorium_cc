@@ -37,7 +37,9 @@ remain future work.
 File-scope objects use `tensorium.global` and `tensorium.get_global`, declared
 in `TensoriumGlobalOps.td`. `TensoriumEnums.td` generates typed pointer predicates
 and global linkage attributes. Integer and zero initializers lower to LLVM
-globals; symbol references lower to LLVM addresses. See [global object support](globals.md).
+globals; symbol references lower to LLVM addresses. `TensoriumAttrs.td` defines
+`GlobalAddressAttr` for static pointer initializers, lowered to LLVM address
+initializer regions without runtime code. See [global object support](globals.md).
 
 ## Module boundaries
 

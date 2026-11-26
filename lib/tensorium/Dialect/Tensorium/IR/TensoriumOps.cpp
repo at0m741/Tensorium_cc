@@ -41,10 +41,35 @@ mlir::LogicalResult tensorium::GlobalOp::verify() {
   }
   if (mlir::isa<mlir::UnitAttr>(*initial))
     return mlir::success();
+  if (mlir::isa<GlobalAddressAttr>(*initial)) {
+    if (!mlir::isa<PtrType>(type))
+      return emitOpError(
+          "global address initializer requires a pointer object");
+    return mlir::success();
+  }
   auto integer = mlir::dyn_cast<mlir::IntegerAttr>(*initial);
   if (!integer || integer.getType() != type)
     return emitOpError(
         "requires a matching integer initializer or unit zero initializer");
+  return mlir::success();
+}
+
+mlir::LogicalResult
+tensorium::GlobalOp::verifySymbolUses(mlir::SymbolTableCollection &symbols) {
+  auto initial = getInitialValue();
+  auto address = initial ? mlir::dyn_cast<GlobalAddressAttr>(*initial)
+                         : GlobalAddressAttr{};
+  if (!address)
+    return mlir::success();
+  auto target =
+      symbols.lookupNearestSymbolFrom<GlobalOp>(*this, address.getGlobal());
+  if (!target)
+    return emitOpError(
+        "address initializer references an undefined Tensorium global");
+  auto pointer = mlir::dyn_cast<PtrType>(getObjectType());
+  if (!pointer || pointer.getPointeeType() != target.getObjectType())
+    return emitOpError("address initializer pointee type does not match the "
+                       "referenced global");
   return mlir::success();
 }
 

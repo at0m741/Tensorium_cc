@@ -66,9 +66,11 @@ template <typename Op> struct MemoryLowering : OpConversionPattern<Op> {
                                            "unsupported global object type");
       Attribute value;
       bool zero = false;
+      tensorium::GlobalAddressAttr address;
       if (auto initial = op.getInitialValue()) {
         zero = isa<UnitAttr>(*initial);
-        if (!zero)
+        address = dyn_cast<tensorium::GlobalAddressAttr>(*initial);
+        if (!zero && !address)
           value = *initial;
       }
       auto global = createOp<LLVM::GlobalOp>(
@@ -77,13 +79,17 @@ template <typename Op> struct MemoryLowering : OpConversionPattern<Op> {
               ? LLVM::Linkage::Internal
               : LLVM::Linkage::External,
           op.getSymName(), value);
-      if (zero) {
+      if (zero || address) {
         OpBuilder::InsertionGuard guard(rewriter);
         auto *block = new Block();
         global.getInitializerRegion().push_back(block);
         rewriter.setInsertionPointToStart(block);
-        auto initial = createOp<LLVM::ZeroOp>(rewriter, loc, type);
-        createOp<LLVM::ReturnOp>(rewriter, loc, initial.getResult());
+        Value initial =
+            address ? createOp<LLVM::AddressOfOp>(rewriter, loc, type,
+                                                  address.getGlobal())
+                          .getResult()
+                    : createOp<LLVM::ZeroOp>(rewriter, loc, type).getResult();
+        createOp<LLVM::ReturnOp>(rewriter, loc, initial);
       }
       rewriter.eraseOp(op);
     } else if constexpr (std::is_same_v<Op, tensorium::GetGlobalOp>) {

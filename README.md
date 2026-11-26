@@ -64,8 +64,8 @@ execute at the source declaration, including on each loop iteration. See the
 
 File-scope objects now use TableGen-defined `tensorium.global` and
 `tensorium.get_global` operations, with LLVM lowering for declarations,
-internal/external linkage, integer constant initializers and zero-initialized
-objects. Constant evaluation currently supports integer literals, arithmetic
+internal/external linkage, integer constant initializers, direct object address
+initializers (`int *p = &global`) and zero-initialized objects. Constant evaluation currently supports integer literals, arithmetic
 conversions and unary/binary `+`, `-`, `*`. See [global object support](docs/globals.md)
 for limitations and test commands.
 

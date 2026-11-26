@@ -2,6 +2,7 @@
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 
 #include "tensorium/Dialect/Tensorium/IR/TensoriumTypes.h"
+#include "tensorium/Dialect/Tensorium/IR/TensoriumAttrs.h"
 
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/SymbolTable.h"

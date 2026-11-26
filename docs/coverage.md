@@ -39,8 +39,9 @@ object file or executable yet.
 Useful supported inputs include functions using integer calculations, `if`,
 `while`, `for`, local variables, fixed-size arrays and typed pointer operations.
 Native fixtures cover pointer aliases, nested pointers, external pointer calls,
-SSA bindings and loop storage. Global objects, strings and many ordinary C
-operators still block otherwise small programs.
+SSA bindings, loop storage and a subset of global objects and static address
+initializers. Strings and many ordinary C operators still block otherwise small
+programs.
 
 ## Types, literals and expressions
 
@@ -84,7 +85,7 @@ Primary sources:
 | `inline` and old-style definitions | Missing complete support | C99 inline/linkage rules and old-style function definitions need implementation. |
 | `return`, `if`/`else`, `while`, `for`, `break`, `continue` | Supported subset | Integer and supported pointer conditions are emitted as CFG control flow. Floating conditions are not generated. |
 | `do`/`while`, `switch`/`case`, labels and `goto` | Missing syntax | AST node placeholders do not provide a parser, Sema or CodeGen implementation. |
-| File-scope declarations and initializers | Supported subset | Compatible declarations merge into one symbol; integer constants, null pointers and zero-initialized objects lower to LLVM. General address/aggregate initializers remain missing. |
+| File-scope declarations and initializers | Supported subset | Compatible declarations merge into one symbol; integer constants, null pointers, direct global object addresses and zero-initialized objects lower to LLVM. Address offsets and aggregate initializers remain missing. |
 | Static local objects | Partial frontend | Persistent storage, initialization and CodeGen remain missing. |
 | Struct/union/enum definitions | Missing syntax | Forward tags exist, but definitions, enumerators and useful member access are unavailable. |
 | Record layout and aggregate ABI | Missing | Field offsets, bit-fields, flexible array members, aggregate copies and native argument/result classification need implementation. |
@@ -147,10 +148,11 @@ File-scope objects now use TableGen-defined global/address operations and typed
 linkage attributes. CodeGen merges canonical declarations, emits integer or zero
 initializers, and resolves accesses from functions. The shared AST evaluator
 checks target-width integer arithmetic and rejects signed overflow in its
-supported subset. The function-prototype symbol-binding issue has been fixed.
+supported subset. Direct addresses such as `int *p = &g` use a generated
+symbolic attribute, with symbol/type verification and LLVM address initializers. The function-prototype symbol-binding issue has been fixed.
 
 Remaining work includes complete C99 constant-expression legality in Sema,
-`sizeof` and other constant operators, address relocations such as `int *p = &g`,
+`sizeof` and other constant operators, array address decay and element offsets,
 aggregate/string initializers, static locals and broader tentative-definition/ABI
 coverage. [Global fixtures](../Tests/CodeGen/Globals/) now register emission,
 structure, rejection and native execution tests; their latest execution status
